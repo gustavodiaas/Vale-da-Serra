@@ -6,8 +6,8 @@ import type { VisualQuality } from './valeFinish';
 import { DesktopQuality, type QualityMode } from './desktopQuality';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
 import type { CityAnchor } from './siliconValley';
-import { buildNordicVale, NORDIC_ANCHORS } from './nordicVillage';
-import { NORDIC_VIEW } from './nordicTerrain';
+import { buildSpringfield } from './springfieldCity';
+import { SPRINGFIELD_VIEW, type SpringfieldPlace } from './springfieldLocations';
 
 export type ValeStage = 1 | 2 | 3 | 4 | 5;
 export type LabelId = CityAnchor['id'];
@@ -22,10 +22,12 @@ export interface ValeHandle {
   dispose(): void;
   setQuality?(mode: QualityMode): void;
   setTimeOfDay?(mode: SceneTime): void;
+  focusLocation?(key: string): void;
+  overview?(): void;
 }
 
-/** Vale com terreno contínuo e modelos GLB ligados ao estágio financeiro. */
-export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void, onAssets?: (status: 'ready' | 'error') => void, onProgress?: (percent: number) => void, onQuality?: (tier: VisualQuality) => void): ValeHandle | null {
+/** Springfield fan recreation with financial destinations and adaptive desktop quality. */
+export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId, place?: SpringfieldPlace) => void, onAssets?: (status: 'ready' | 'error') => void, onProgress?: (percent: number) => void, onQuality?: (tier: VisualQuality) => void): ValeHandle | null {
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -46,7 +48,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   const scene = new THREE.Scene();
   let disposed = false;
-  const city = buildNordicVale(scene, undefined, (loaded, total) => { if (!disposed) onProgress?.(Math.round(loaded / total * 100)); });
+  const city = buildSpringfield(scene, (loaded, total) => { if (!disposed) onProgress?.(Math.round(loaded / total * 100)); });
   let assetsReady = false;
   const environmentScene = new RoomEnvironment();
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -73,19 +75,20 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   sun.shadow.normalBias = 0.04;
   sun.shadow.bias = -0.00015;
   const sc = sun.shadow.camera;
-  sc.left = sc.bottom = -90;
-  sc.right = sc.top = 90;
+  sc.left = sc.bottom = -270;
+  sc.right = sc.top = 270;
   sc.near = 5;
-  sc.far = 240;
+  sc.far = 800;
   scene.add(sun);
+  let weatherFogNear = 500, weatherFogFar = 1100;
 
   const paint = () => {
     const hour = new Date().getHours();
     const night = timeOfDay === 'night' || (timeOfDay === 'real' && (weather.tempC === null ? hour < 6 || hour >= 18 : !weather.isDay));
     const c = new THREE.Color('#bdccd0');
     let light = 1;
-    let fogNear = 250;
-    let fogFar = 550;
+    let fogNear = 500;
+    let fogFar = 1100;
     switch (weather.kind) {
       case 'cloudy': c.lerp(new THREE.Color('#9aa7b3'), 0.45); light = 0.8; break;
       case 'rain': c.lerp(new THREE.Color('#9aa7b3'), 0.65); light = 0.7; fogNear = 160; fogFar = 360; break;
@@ -103,7 +106,9 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     const hours = timeOfDay === 'day' ? 14 : new Date().getHours() + new Date().getMinutes() / 60;
     const solarAngle = (hours - 6) / 12 * Math.PI;
     const elevation = Math.max(.12, Math.sin(solarAngle));
-    sun.position.set(night ? -35 : Math.cos(solarAngle) * 70, night ? 55 : 32 + elevation * 65, 60);
+    fogNear *= 1.5; fogFar *= 1.5;
+    weatherFogNear = fogNear; weatherFogFar = fogFar;
+    sun.position.set(night ? -120 : Math.cos(solarAngle) * 180, night ? 190 : 120 + elevation * 150, 160);
     renderer.shadowMap.needsUpdate = true;
     scene.background = c;
     scene.fog = new THREE.Fog(c, fogNear, fogFar);
@@ -115,15 +120,15 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     for (const m of city.windows) m.emissiveIntensity = night ? 2.2 : .18;
   };
 
-  const cam = new THREE.PerspectiveCamera(36, 1, 1, 700);
+  const cam = new THREE.PerspectiveCamera(36, 1, 1, 2200);
   const finish = createValeFinish(renderer, scene, cam);
 
   // etiquetas HTML ancoradas nos prédios
-  const labels = NORDIC_ANCHORS.map((def) => {
+  const labels = city.anchors.map((def) => {
     const el = document.createElement('button');
     el.type = 'button';
     el.setAttribute('aria-label', `Visitar ${def.name}`);
-    el.addEventListener('click', () => onSelect?.(def.id));
+    el.addEventListener('click', () => onSelect?.(def.id, def.place));
     el.className = 'vale-label';
     el.style.visibility = 'hidden';
     el.dataset.id = def.id;
@@ -136,11 +141,11 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   });
 
   // câmera: ângulo fixo estilo mapa, arrastar para mover, roda para zoom
-  const th = NORDIC_VIEW.azimuth;
-  const ph = NORDIC_VIEW.polar;
-  let rad: number = NORDIC_VIEW.radius;
-  let radT: number = NORDIC_VIEW.radius;
-  const home = new THREE.Vector3(...NORDIC_VIEW.target);
+  const th = SPRINGFIELD_VIEW.azimuth;
+  const ph = SPRINGFIELD_VIEW.polar;
+  let rad: number = SPRINGFIELD_VIEW.radius;
+  let radT: number = SPRINGFIELD_VIEW.radius;
+  const home = new THREE.Vector3(...SPRINGFIELD_VIEW.target);
   const tgt = home.clone();
   const panTarget = home.clone();
   let drag: { x: number; y: number } | null = null;
@@ -161,8 +166,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     if (press?.moved) applyRatio(Math.min(1, renderRatio));
     panTarget.x += -Math.sin(th) * dx * k - Math.cos(th) * dy * k;
     panTarget.z += Math.cos(th) * dx * k - Math.sin(th) * dy * k;
-    panTarget.x = Math.min(90, Math.max(-90, panTarget.x));
-    panTarget.z = Math.min(70, Math.max(-90, panTarget.z));
+    panTarget.x = Math.min(260, Math.max(-310, panTarget.x));
+    panTarget.z = Math.min(260, Math.max(-310, panTarget.z));
     drag = { x: e.clientX, y: e.clientY };
   };
   const onUp = (e: PointerEvent) => {
@@ -171,13 +176,13 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       raycaster.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), cam);
       const visible = city.buildings.filter(b => b.group.visible && b.scale > .9);
       const hit = raycaster.intersectObjects(visible.map(b => b.group), true)[0];
-      if (hit) { const building = visible.find(b => b.group.getObjectById(hit.object.id)); if (building) onSelect?.(building.id); }
+      if (hit) { const building = visible.find(b => b.group.getObjectById(hit.object.id)); if (building) onSelect?.(building.id, building.place); }
     }
     drag = null;
     press = null;
     applyRatio(renderRatio);
   };
-  const clampRad = (v: number) => Math.min(215, Math.max(35, v));
+  const clampRad = (v: number) => Math.min(1200, Math.max(38, v));
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     radT = clampRad(radT * (1 + e.deltaY * 0.001));
@@ -305,6 +310,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     if (precip) precip.pts.position.set(tgt.x, 0, tgt.z);
     cam.position.set(tgt.x + rad * Math.sin(ph) * Math.cos(th), tgt.y + rad * Math.cos(ph), tgt.z + rad * Math.sin(ph) * Math.sin(th));
     cam.lookAt(tgt);
+    if (scene.fog instanceof THREE.Fog) { const overviewDistance = Math.max(0, rad - 300); scene.fog.near = weatherFogNear + overviewDistance; scene.fog.far = weatherFogFar + overviewDistance; }
     cam.updateMatrixWorld();
     renderer.info.reset(); finish.render();
     if (now - readyAt > 3000 && quality.fps > 0) {
@@ -319,9 +325,9 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       v3.copy(l.pos).project(cam);
       const locked = stage < l.def.min;
       l.el.classList.toggle('is-locked', locked); l.el.disabled = locked;
-      l.info.textContent = locked ? `Em obras · Nível ${l.def.min}` : l.text;
+      l.info.textContent = l.text || l.def.place.purpose;
       const primary = ['garagem', 'compliance', 'conselho', 'cafe', 'banco', 'mercado', 'padaria'].includes(l.def.id);
-      const show = assetsReady && (primary || rad < 145) && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
+      const show = assetsReady && (primary || rad < 260) && (rad < 390 || l.def.place.key === 'simpsons' || l.def.place.key === 'plant') && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
       l.el.style.visibility = show ? 'visible' : 'hidden';
       if (show) l.el.style.transform = `translate(${((v3.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-v3.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%, -100%)`;
     }
@@ -341,16 +347,18 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       setPrecip(wt.kind === 'rain' || wt.kind === 'storm' ? 'rain' : wt.kind === 'snow' ? 'snow' : null);
     },
     setLabel(id, text) {
-      const l = labels.find((x) => x.def.id === id);
-      if (l) { l.text = text; if (stage >= l.def.min) l.info.textContent = text; }
+      for (const l of labels) if (l.def.id === id) { l.text = text; l.info.textContent = text; }
+      labelStage = -1;
     },
     zoom(f) {
       radT = clampRad(radT * f);
     },
     reset() {
       panTarget.copy(home);
-      radT = NORDIC_VIEW.radius;
+      radT = SPRINGFIELD_VIEW.radius;
     },
+    focusLocation(key) { const building = city.buildings.find(b => b.place.key === key); if (building) { panTarget.set(building.group.position.x, 5, building.group.position.z); radT = building.place.isCharacter ? 80 : 140; } },
+    overview() { panTarget.set(-35, 5, -35); radT = 1000; },
     setQuality(mode) { quality.setMode(mode); applyQuality(); },
     setTimeOfDay(mode) { timeOfDay = mode; paint(); },
     dispose() {

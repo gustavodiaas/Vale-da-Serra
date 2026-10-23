@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { heightAt } from './nordicTerrain';
 
-export function createFjordWater() {
+export function createFjordWater(sampleHeight = heightAt, extent = 440) {
   const size = 256, depths = new Uint8Array(size * size);
-  for (let z = 0; z < size; z++) for (let x = 0; x < size; x++) depths[z * size + x] = Math.round(Math.min(1, Math.max(0, (heightAt(x / (size - 1) * 440 - 220, z / (size - 1) * 440 - 220) + 10) / 90)) * 255);
+  for (let z = 0; z < size; z++) for (let x = 0; x < size; x++) depths[z * size + x] = Math.round(Math.min(1, Math.max(0, (sampleHeight(x / (size - 1) * extent - extent / 2, z / (size - 1) * extent - extent / 2) + 10) / 90)) * 255);
   const depthTexture = new THREE.DataTexture(depths, size, size, THREE.RedFormat);
   depthTexture.minFilter = depthTexture.magFilter = THREE.LinearFilter;
   depthTexture.needsUpdate = true;
@@ -25,7 +25,7 @@ export function createFjordWater() {
     shader.fragmentShader = `uniform float fjordTime; uniform sampler2D fjordDepth; varying vec3 vFjord;\n${shader.fragmentShader}`;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      float bottom = texture2D(fjordDepth,(vFjord.xz+220.0)/440.0).r*90.0-10.0;
+      float bottom = texture2D(fjordDepth,(vFjord.xz+${(extent / 2).toFixed(1)})/${extent.toFixed(1)}).r*90.0-10.0;
       float depth = max(0.0,-.25-bottom);
       vec3 shallow = vec3(.20,.47,.45);
       vec3 deep = vec3(.055,.23,.29);
@@ -37,7 +37,7 @@ export function createFjordWater() {
     `);
   };
   material.customProgramCacheKey = () => 'fjord-depth-ripples-v2';
-  const geometry = new THREE.PlaneGeometry(440, 440, 48, 48); geometry.rotateX(-Math.PI / 2);
+  const geometry = new THREE.PlaneGeometry(extent, extent, 48, 48); geometry.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(geometry, material); mesh.position.y = -.25; mesh.name = 'fjord-water';
   return { mesh, update(seconds: number) { time.value = seconds; } };
 }

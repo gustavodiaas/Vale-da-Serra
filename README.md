@@ -1,43 +1,54 @@
-# Garagem
+# Springfield pessoal
 
-Finanças pessoais em uma vila acolhedora. Cuide da sua casa, das contas do mês, do vale-alimentação e da reserva. Garagem permanece como nome de trabalho.
+Recriação de fã de Springfield em Three.js para organizar finanças pessoais. A casa dos Simpsons é o lar do usuário. Projeto pessoal, não oficial, anteriormente chamado Garagem / Vale da Serra.
 
 ## Rodar
 
     npm install
-    npm run dev      # app com dados de demonstração
-    npm test         # testes do motor financeiro
+    npm run dev
+    npm test
     npm run build
 
-## Ligar o Supabase
+## A cidade
 
-1. Crie um projeto no Supabase.
-2. Rode `supabase/migrations/0001_init.sql` no SQL Editor.
-3. Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+106 destinos físicos: 47 locais nomeados e 59 casas de bairro. Inclui Evergreen Terrace, Kwik-E-Mart, Krusty Burger, Moe's, Lard Lad, escola, banco, biblioteca, prefeitura, hospital, igreja, usina nuclear, Duff, mansão Burns, estádio, lago, Krustyland, aeroporto e porto. A disposição é uma composição para este aplicativo, não um mapa canônico de todos os episódios.
 
-## Estrutura
+32 moradores animados, incluindo 10 personagens selecionáveis: Homer, Marge, Bart, Lisa, Maggie, Apu, Krusty, Ned Flanders, Wiggum e Burns. Há 24 carros, ônibus escolar, três barcos, calçadas, faixas, sinaleiras e arborização.
 
-- `src/engine`: motor puro (sem dependências): burn, cenários, fôlego, pró-labore, estágio e alertas. Valores em centavos.
-- `supabase/migrations`: esquema e RLS por workspace (PF ou PJ).
-- `src/vale`: cena 3D do Vale (three.js), ligada à jornada da casa com os dados financeiros.
-- `src/homeJourney.ts`: níveis residenciais e progresso por cobertura de despesas.
-- `src/App.tsx`: painel "Hoje" sobre dados de demonstração.
-- `HANDOFF.md`: contexto completo, decisões e próximos passos.
+Arraste para explorar, use a roda para aproximar e clique nos prédios ou personagens. **Explorar Springfield** permite buscar todos os 116 destinos, filtrar por atividade e enquadrar a cidade inteira. Os rótulos flutuantes destacam os locais principais; os demais continuam clicáveis e disponíveis na busca.
 
-## Vale nórdico
+Cada destino prepara uma ação real:
 
-A cena ativa é uma vila residencial inspirada em fiordes da Noruega e nas Ilhas Faroe. Casas de bairro do City Kit Suburban 2.0 substituem a arquitetura medieval: sobrados, garagens, portas e janelas maiores, quintais cercados e fachadas comerciais com toldos. O bairro inclui oito residências adicionais, praça, jardins e terraço do café. Casas, rochas e vegetação são de Kenney; o banco de praça é de Quaternius. Todos são CC0. Fontes e licenças em `CREDITS.md`.
+- Casa: carteira, perfil e contas fixas.
+- Usina e locais de trabalho: registrar salário recebido.
+- Kwik-E-Mart / Apu: compras com vale-alimentação ou dinheiro.
+- Krusty, Moe's e outros restaurantes: registrar refeição.
+- Banco / Burns: reserva e meta de economia.
+- Comércio, saúde, escola, lazer e transporte: registrar gastos com descrição do destino.
+- Serviços cívicos: pagamentos; mansão: planejamento.
 
-`nordicVillage.ts` monta os destinos financeiros e compartilha superfícies entre objetos repetidos. `nordicTerrain.ts` cria encostas, margens e o terraço habitado. A cidade anterior permanece no histórico e no código legado, mas não é carregada pela cena ativa.
+Visitar não movimenta saldos. A confirmação no formulário existente é necessária. Todos os locais usam o mesmo controle pessoal, sem inventários ou economias financeiras independentes. Não há interiores exploráveis, diálogos roteirizados, todas as construções da série ou simulação completa de trânsito.
 
-`fjordWater.ts` aplica profundidade costeira, reflexos, espuma e ondulações no material da água. `villageResidents.ts` anima 18 moradores em percursos ligados aos caminhos, com pausas e sacolas de compras. `fjordBoats.ts` monta um veleiro com velas curvas e um barco de porto, incluindo trajetos, balanço e esteira. Moradores compartilham geometrias e atualizam as poses a 15 Hz; água e barcos respeitam a preferência por movimento reduzido.
+## Finanças preservadas
 
-Os testes em `tests/nordicVillage.test.ts` decodificam os GLBs sem navegador, verificam arquivos de textura, os 11 destinos, cancelamento, falha de carregamento e o orçamento de geometria. Essas checagens não medem FPS nem substituem a avaliação visual no dispositivo.
+Entradas, saídas fixas e diárias, perfil com salário e benefício, vale separado, metas mensais, reserva, histórico, previsões e backup JSON. Persistência local em garagem:personal:v1, sem alteração dos registros anteriores. A integração de login e banco remoto permanece futura.
 
-O acabamento visual inclui HDRI local, correção de cor, SMAA/FXAA conforme o nível, bloom noturno e miniatura leve. O menu **Visual do vale** permite escolher qualidade automática/alta/média/baixa e prévia de dia/noite. A renderização mira 60 fps em desktop e adapta resolução e efeitos; desempenho em GPU integrada ainda precisa de medição no dispositivo.
+Os cinco níveis residenciais continuam em src/homeJourney.ts. A cobertura de despesas por dinheiro + reserva libera marcos em 1, 3, 6 e 12 meses. A casa dos Simpsons e a cidade permanecem presentes em todos os níveis. O jardim ganha árvore e banco no nível 3. A maior conquista visual continua salva em garagem:vale:unlocked:v1.
 
-Os estabelecimentos e as casas da vizinhança já estão presentes desde o começo. A casa do usuário recebe ampliações nos níveis 3 e 5, e a maior conquista visual fica preservada entre sessões. Veja [direção visual e orçamento](docs/visual-quality.md) e [créditos completos](CREDITS.md).
+## Estrutura e qualidade
 
-## Regras de estágio
+- src/vale/springfieldLocations.ts: catálogo de locais e personagens.
+- springfieldBuildings.ts, springfieldKit.ts: modelos próprios montados e agrupados por região/material, atlas de letreiros.
+- springfieldPeople.ts, springfieldTraffic.ts: moradores e veículos com recursos compartilhados.
+- springfieldCity.ts: cidade, terreno, oceano, barcos e seleção.
+- springfieldActions.ts: ação financeira de cada tipo de destino.
+- createVale.ts, Vale.tsx: câmera, navegação, busca, clima, rótulos, qualidade e renderização.
+- src/engine: motor financeiro existente, preservado nesta alteração.
 
-Os nomes visíveis são Novo lar, Lar acolhedor, Casa com jardim, Lar completo e Vida tranquila. A cobertura das despesas mensais pelo dinheiro disponível e pela reserva libera os níveis em 1, 3, 6 e 12 meses. Essa apresentação fica em `src/homeJourney.ts` e não depende de imposto ou pró-labore. Os IDs internos antigos foram mantidos por compatibilidade; os cálculos de lançamentos e o motor financeiro permanecem intactos.
+PBR, HDRI local, ACES/sRGB, sombras, cor, antialiasing e bloom noturno. Qualidade automática reduz resolução e efeitos, preservando a cidade. Meta de 60 fps em desktop, ainda sem benchmark de GPU. O proprietário realiza a avaliação visual e pediu para não abrir navegador. Build e testes de CPU não substituem essa avaliação.
+
+Veja [orçamento visual](docs/visual-quality.md), [créditos](CREDITS.md) e [passagem de bastão](HANDOFF.md). Os módulos e modelos antigos da vila nórdica permanecem como legado, fora da cena ativa.
+
+## Supabase futuro
+
+O esquema está em supabase/migrations/0001_init.sql; .env.example contém as variáveis. A migração e o login ainda precisam de integração e validação em um projeto real.

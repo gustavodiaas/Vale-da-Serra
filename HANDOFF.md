@@ -1,67 +1,39 @@
-# Garagem: passagem de bastão
+# Springfield: passagem de bastão
 
-Nome provisório. Finanças pessoais gamificadas em uma vila residencial. **Produto para computador (desktop first)**, com conceito, texto e arte originais. Usar apenas assets com licença compatível e fonte documentada.
+## Orientação atual do proprietário
 
-## Conceito
-O usuário é morador de uma casa comum em um vale costeiro inspirado na Noruega e nas Ilhas Faroe. A orientação mais recente é uma vila residencial acolhedora, com casas de bairro, garagens, sobrados, quintais e janelas grandes. A arquitetura medieval e as cabanas foram substituídas pelo Kenney City Kit Suburban 2.0. A progressão amplia a própria casa. Vocabulário visível: casa, lar, reserva, contas da casa, conquistas, avisos e moedas. Não apresentar a pessoa como fundador nem usar pré-seed, campus, sede ou equity na interface.
+Projeto pessoal, desktop, Vite + React + TypeScript + Three.js. A solicitação mais recente substitui os conceitos de startup, Califórnia e vila nórdica: criar uma Springfield ampla, com a casa dos Simpsons como lar, personagens e locais utilizáveis para as finanças pessoais. A preferência antiga por arte sem personagens de terceiros foi expressamente substituída por esse pedido.
 
-## Diferencial
-Entradas, contas fixas, gastos diários, vale-alimentação separado, salário previsto, meta mensal de economia e reserva. A casa e a vila acompanham a organização financeira, com moradores caminhando, barcos e comércio local.
+Responder em português brasileiro, direto, sem travessão. Não abrir navegador, Playwright nem capturar screenshots: o proprietário testa e envia imagens. Atualizações verificadas podem ser enviadas diretamente a main de gustavodiaas/Vale-da-Serra. Push não comprova deploy Vercel.
 
-## Níveis da casa (`src/homeJourney.ts`)
-- Novo lar: cobertura abaixo de 1 mês
-- Lar acolhedor: pelo menos 1 mês
-- Casa com jardim: pelo menos 3 meses
-- Lar completo: pelo menos 6 meses
-- Vida tranquila: pelo menos 12 meses
+## Implementado
 
-A cobertura considera dinheiro + reserva dividido pela estimativa de despesas mensais. Os nomes antigos de estágio permanecem como IDs internos para compatibilidade. O motor original, incluindo `stageFor`, não foi alterado, mas a apresentação residencial não depende dos critérios antigos de imposto e pró-labore.
+- 106 construções / áreas selecionáveis: 47 locais nomeados e 59 casas de bairro; dez personagens também selecionáveis. Disposição própria para o aplicativo, sem pretensão de cartografia canônica.
+- 32 moradores, incluindo Homer, Marge, Bart de skate, Lisa, Maggie, Apu, Krusty, Ned, Wiggum e Burns. Percursos com pausas e retorno; quatro personagens ficam próximos dos seus locais.
+- 24 carros e um ônibus escolar em trajetos retangulares, três barcos, arborização, calçadas, faixas e sinaleiras decorativas. As sinaleiras ainda não controlam o tráfego.
+- Letreiros em atlas único; geometrias estáticas agrupadas por região/material; peças de personagens e veículos compartilhadas. Não há downloads de modelos de Springfield.
+- Busca e categorias no menu Explorar Springfield; seleção enquadra o destino e abre sua ação. Botão de visão geral; zoom e arraste com amortecimento; rótulos DOM para locais principais.
+- Todos os destinos têm ação em springfieldActions.ts, ligada aos formulários e painéis existentes. Não há débito por visita. Kwik-E-Mart / Apu usam vale por padrão, outros comércios usam dinheiro. O formulário permite escolher a carteira.
+- Casa dos Simpsons preservada em todos os cinco estágios. Jardim adicional a partir do nível 3; não transformar a casa em startup nem trocar por torre.
 
-O prédio e as conquistas nunca se perdem. O selo atual reflete o caixa de hoje.
+## Finanças e dados
 
-## Planos antigos (hipóteses históricas, não implementados)
-Garagem grátis permanente (decidido), Startup R$ 24,90/mês, Scale R$ 44,90/mês. Startup: PF e PJ, 3 cenários, imposto provisionado, metas, cartões. Scale: IA para comprovantes, contador ou sócio convidado, relatórios.
+Não alterar src/engine ou os testes existentes sem um novo pedido. Dados e backup compatíveis: chave garagem:personal:v1. Lançamentos em centavos; entradas, fixas, diários, vale separado, reserva, resgates, perfil, salário/benefício previstos, meta e avisos. Casas e bairros compartilham o controle financeiro do próprio usuário.
 
-## Stack
-Vite + React + TypeScript (sem SSR), Supabase (Postgres, Auth por código no e-mail e Google, RLS, Edge Functions), three.js para o Vale. Cobrança por Mercado Pago ou Stripe (a decidir). Dinheiro sempre em centavos. Sem senha de banco, nunca.
+src/homeJourney.ts preserva nomes residenciais e marcos de cobertura em 1, 3, 6 e 12 meses. IDs antigos permanecem por compatibilidade. O selo reflete o nível calculado; a maior conquista visual fica em garagem:vale:unlocked:v1.
 
-## Estado atual (23/10/2026)
-- 50 testes existentes em Vitest, incluindo motor, modelos, relevo, água e rotinas. Nesta adaptação do prompt visual, nenhum arquivo do motor ou teste foi alterado.
-- `src/engine`: motor puro. A UI atual inclui entradas, contas fixas, gastos diários, carteira de alimentação e meta de economia, com persistência local e backup JSON.
-- `supabase/migrations/0001_init.sql`: esquema da Fase 1, RLS por workspace, funções is_member/can_write/is_owner, RPC create_workspace.
-- `src/vale`: cena Three.js com modelos GLB CC0 locais, HDRI CC0, PBR, água com shader, pedestres e barcos. `createVale.ts` controla câmera, clima, progressão e renderização; `Vale.tsx` liga ao motor. Carregada com lazy import.
-- API pública preservada: `setStage`, `setWeather`, `setLabel`, `zoom`, `reset`, `dispose`. Acrescentadas opções de qualidade e horário da cena. O prompt antigo citava nomes que não existem nesta versão; não renomear métodos usados pelo app.
-- Pós-processamento escalável em `valeFinish.ts`; alvo desktop de 60 fps e níveis automáticos em `desktopQuality.ts`. Sem promessa de FPS medido.
-- Os estabelecimentos e as casas vizinhas estão presentes desde o começo. A casa principal recebe ampliações nos níveis 3 e 5. O maior estágio visual continua salvo em `garagem:vale:unlocked:v1`; oscilações financeiras não apagam a casa já conquistada.
-- Modelos residenciais adaptados por `scripts/prepare-residential.mjs`, com cores do atlas convertidas em vértices. Correspondência de tipos e licenças em `CREDITS.md`. Casas decorativas e caminhos são agrupados para controlar chamadas de desenho.
-- `src/App.tsx`: HUD financeiro em português, sobre o vale. O controle "Visual do vale" permite comparar qualidade e dia/noite sem afetar finanças ou clima real do cabeçalho.
-- Fontes e licenças em `CREDITS.md`. Direção, orçamento, critérios automáticos e limites em `docs/visual-quality.md`.
-- `docs/vale-preview-standalone.html`: a primeira versão da cena em HTML único (three r128), só como referência.
+## Cena e API
 
-## Avisos honestos
-- A migração SQL **não foi executada** em um Supabase real. Rodar e corrigir primeiro.
-- A validação visual continua com o proprietário, que pediu para não abrir navegador. Não executar Playwright ou gerar screenshots sem uma autorização direta posterior. Compilação e testes de CPU não comprovam iluminação, pós-processamento ou desempenho na GPU.
-- A cena deve manter o conteúdo nos três níveis de qualidade, reduzindo resolução interna e efeitos quando necessário. Sem WebGL, há aviso amigável e os menus financeiros permanecem disponíveis.
+Cena ativa em springfieldCity.ts, catálogo em springfieldLocations.ts, arquitetura em springfieldBuildings.ts, kit e agrupamento em springfieldKit.ts, pessoas e carros nos respectivos módulos. A vila nórdica, modelos CC0 e testes anteriores permanecem como legado, fora da cena atual. fjordWater.ts aceita sampler de relevo e extensão opcionais; valores padrão anteriores preservados.
 
-- O clima real (Open-Meteo, sem chave) afeta céu, luz, neblina e chuva/neve no Vale (`src/vale/weather.ts`). Também não foi conferido visualmente.
+API preservada: setStage, setWeather, setLabel, zoom, reset, dispose. Opções existentes: setQuality e setTimeOfDay. Acrescentados focusLocation e overview. Seleção aceita metadados opcionais do destino como segundo argumento.
 
-## Fluxo de trabalho do dono
-O proprietário faz os testes visuais e manda screenshots. Atualizações validadas podem ser enviadas diretamente ao `main` de `gustavodiaas/Vale-da-Serra`. O deploy é na Vercel; enviar ao GitHub não confirma sucesso do deploy. O build roda `tsc --noEmit && vite build`. Supabase fica para depois; preservar os dados financeiros locais e as funções existentes.
+createVale.ts conserva HDRI local, ACES/sRGB, clima, sombra estática, acabamento escalável e instrumentação. Objetos animados não lançam sombras dinâmicas. desktopQuality.ts mira 60 fps e reduz efeitos/resolução. Não afirmar desempenho de GPU sem medição.
 
-## Próximos passos
-1. Rodar a migração em um projeto Supabase e corrigir o que falhar.
-2. Login (código no e-mail e Google) e criação do workspace (RPC create_workspace).
-3. Lançamento em um toque ligado ao banco, com atalhos de teclado (é desktop).
-4. Painel Hoje lendo dados reais e gravando `forecast_snapshots`.
-5. Imposto provisionado, contas recorrentes, metas, Conselho.
-6. Fase 2: moedas (ledger só de inserção, com limite diário), missões, check-in, fechamento mensal, loja de personalização do Vale.
-7. Depois: importação de extrato (OFX, CSV, PDF), leitura de comprovante por IA, contador e sócio convidados, open finance.
+## Validação e limites
 
-## Regras de trabalho
-Dono do projeto é o único testador por enquanto. Responder em português do Brasil, direto, com opinião firme. Sem travessão (em dash) nos textos. Nenhum nome, logo ou personagem de terceiros na arte ou no texto.
+Os 50 testes anteriores permanecem intactos. Testes adicionais verificam catálogo, seleção de todos os destinos, ações financeiras, animação, cancelamento e orçamento. Build inclui TypeScript e Vite.
 
-## Rodar
-    npm install
-    npm run dev
-    npm test
-    npm run build
+Sem navegador ou avaliação visual automática, conforme pedido. Ainda não há interiores 3D, conversas, missões, trânsito com colisão ou todos os locais já mostrados na série. Arte temática é interpretação estilizada em código, sem extração de jogos ou assets oficiais. Não apresentar a temática como CC0; ver CREDITS.md.
+
+Supabase permanece futuro. Não executar migrações, criar login ou mudar persistência em ajustes visuais. Moedas ainda são a contagem visual existente, sem loja nem economia independente.
