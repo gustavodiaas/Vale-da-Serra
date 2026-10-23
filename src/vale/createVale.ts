@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { createValeFinish } from './valeFinish';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
 import type { CityAnchor } from './siliconValley';
 import { buildNordicVale, NORDIC_ANCHORS } from './nordicVillage';
@@ -46,7 +48,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   scene.environment = environment.texture;
   scene.environmentIntensity = .38;
   environmentScene.dispose();
-  pmrem.dispose();
+  let naturalEnvironment: THREE.WebGLRenderTarget | null = null;
+  void new HDRLoader().loadAsync(`${import.meta.env.BASE_URL}environment/kiara_1_dawn_1k.hdr`).then(texture => {
+    if (disposed) { texture.dispose(); return; }
+    naturalEnvironment = pmrem.fromEquirectangular(texture); texture.dispose();
+    scene.environment = naturalEnvironment.texture;
+  }).catch(() => { /* The local room environment remains available offline. */ }).finally(() => pmrem.dispose());
   let weather: ValeWeather = DEFAULT_WEATHER;
   let precip: { pts: THREE.Points; kind: 'rain' | 'snow'; speed: number } | null = null;
 
@@ -83,6 +90,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       c.lerp(new THREE.Color('#0b1626'), 0.9);
       light *= 0.5;
     }
+    scene.environmentIntensity = night ? .1 : .48 * light;
+    finish.setNight(night);
     scene.background = c;
     scene.fog = new THREE.Fog(c, fogNear, fogFar);
     hemi.color.set(night ? 0x7788bb : 0xe8f1ff);
@@ -93,6 +102,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   };
 
   const cam = new THREE.PerspectiveCamera(36, 1, 1, 700);
+  const finish = createValeFinish(renderer, scene, cam);
 
   // etiquetas HTML ancoradas nos prédios
   const labels = NORDIC_ANCHORS.map((def) => {
@@ -123,6 +133,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const raycaster = new THREE.Raycaster();
   const onDown = (e: PointerEvent) => {
     renderer.setPixelRatio(Math.min(1, renderRatio));
+    finish.resize(w, h, Math.min(1, renderRatio));
     canvas.setPointerCapture(e.pointerId);
     drag = { x: e.clientX, y: e.clientY };
     press = { x: e.clientX, y: e.clientY, moved: false };
@@ -150,6 +161,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     drag = null;
     press = null;
     renderer.setPixelRatio(renderRatio);
+    finish.resize(w, h, renderRatio);
   };
   const clampRad = (v: number) => Math.min(215, Math.max(35, v));
   const onWheel = (e: WheelEvent) => {
@@ -172,6 +184,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     w = cw;
     h = ch;
     renderer.setSize(cw, ch, false);
+    finish.resize(cw, ch, renderer.getPixelRatio());
     cam.aspect = cw / ch;
     cam.fov = cw < ch ? 52 : 36;
     if (cw > 900) cam.setViewOffset(cw, ch, -Math.min(160, cw * .1), 0, cw, ch);
@@ -233,7 +246,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     const dt = Math.min(.1, interval / 1000);
     last = now;
     slowFrames = interval > 55 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
-    if (slowFrames >= 20 && renderRatio > .8) { renderRatio = Math.max(.8, renderRatio - .15); renderer.setPixelRatio(drag ? Math.min(1, renderRatio) : renderRatio); slowFrames = 0; }
+    if (slowFrames >= 20 && renderRatio > .8) { renderRatio = Math.max(.8, renderRatio - .15); renderer.setPixelRatio(drag ? Math.min(1, renderRatio) : renderRatio); finish.resize(w, h, renderer.getPixelRatio()); finish.setQuality(renderRatio < 1 ? 'low' : 'medium'); slowFrames = 0; }
     if (!reduce) elapsed += dt;
     if (!reduce && !drag) city.update(elapsed);
     rad += (radT - rad) * Math.min(1, dt * 8);
@@ -259,7 +272,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     cam.position.set(tgt.x + rad * Math.sin(ph) * Math.cos(th), tgt.y + rad * Math.cos(ph), tgt.z + rad * Math.sin(ph) * Math.sin(th));
     cam.lookAt(tgt);
     cam.updateMatrixWorld();
-    renderer.render(scene, cam);
+    finish.render();
     const moveLabels = labelX !== tgt.x || labelZ !== tgt.z || Math.abs(labelRad - rad) > .001 || !Number.isFinite(labelRad) || labelStage !== stage || labelWidth !== w || labelHeight !== h;
     if (!moveLabels) return;
     labelX = tgt.x; labelZ = tgt.z; labelRad = rad; labelStage = stage; labelWidth = w; labelHeight = h;
@@ -322,6 +335,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       for (const texture of textures) texture.dispose();
       for (const material of materials) material.dispose();
       environment.dispose();
+      naturalEnvironment?.dispose();
+      finish.dispose();
       renderer.dispose();
     },
   };
