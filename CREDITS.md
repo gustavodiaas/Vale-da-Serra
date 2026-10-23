@@ -1,8 +1,10 @@
 # Créditos da arte
 
-A cena ativa é uma recriação de fã de Springfield para uso pessoal, não oficial. Os nomes, personagens e locais de The Simpsons pertencem aos seus respectivos titulares. As interpretações 3D são construídas no código deste projeto; não foram extraídos arquivos de jogos, comprados pacotes ou redistribuídos modelos oficiais. A temática de The Simpsons não é apresentada como CC0.
+A cena ativa é uma recriação de fã de Springfield para uso pessoal, não oficial. Os nomes, personagens e locais de The Simpsons pertencem aos seus respectivos titulares. Não foram extraídos arquivos de jogos, comprados pacotes ou redistribuídos modelos oficiais. A temática não é apresentada como CC0.
 
-Arquitetura, veículos, terreno e letreiros são montados pelos módulos `springfield*.ts`. Os personagens são desenhos originais de fã feitos com caminhos vetoriais em `cartoonPeopleArt.ts` e rasterizados em um atlas local de animação no navegador. A paleta e a pintura são definidas em `cartoonLook.ts` e `cartoonFinish.ts`. A cena ativa não baixa modelos, sprites oficiais ou HDRI. O ambiente e os modelos das versões anteriores permanecem no acervo abaixo.
+A pintura public/art/springfield-illustrated-v1.png foi gerada com a ferramenta integrada imagegen em 23/10/2026 e aprovada pelo proprietário após prévia na conversa. É uma interpretação gerada de fã, não uma captura da série, arte oficial ou reprodução de um mapa canônico. Prompt e procedência em public/art/ART-PROMPT.md.
+
+Os personagens animados adicionais são desenhos de fã feitos no código em cartoonPeopleArt.ts, rasterizados num atlas local. A cena utiliza Three.js para exibir a pintura e posicionar as áreas clicáveis; não carrega modelos 3D ou HDRI. Vários nomes do catálogo são associados a edifícios de apoio da composição, sem afirmar fidelidade de fachada de cada local secundário.
 
 ## Acervo anterior, fora da cena ativa
 

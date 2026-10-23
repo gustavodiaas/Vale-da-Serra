@@ -1,36 +1,25 @@
-# Direção e orçamento visual
+# Direção visual aprovada: mapa ilustrado
 
-## Direção atual: desenho cartoon
+A grade de modelos procedurais e seu contorno pós-processado foram rejeitados. O proprietário aprovou uma pintura de Springfield gerada com imagegen, agora exibida diretamente no site. A identidade está nas fachadas e na composição da arte, não em um filtro sobre blocos.
 
-O proprietário rejeitou o aspecto de maquete 3D e pediu desenho como os Simpsons. A cidade continua em Three.js, mas a apresentação é ilustrada: câmera ortográfica, cores vivas, duas faixas discretas de sombra, contornos escuros e personagens efetivamente desenhados em 2D.
+## Cena ativa
 
-106 destinos físicos e 10 personagens selecionáveis. As finanças, o catálogo, a busca, a navegação, o clima e os cinco estágios foram preservados.
+- PNG local de 1536 × 1024, 3.849.177 bytes, textura sRGB num plano de duas faces Three.js.
+- Câmera ortográfica alinhada à imagem, sem perspectiva ou inclinação adicionais.
+- Sem PBR, HDRI, sombra, tone mapping, desfoque, bloom ou filtro de tinta.
+- 116 regiões interativas; nove rótulos principais; zoom, arraste, busca e visão geral.
+- 32 sprites de moradores, atlas compartilhado, poses a 20 Hz. Eles complementam os personagens estáticos pintados no fundo. Carros e barcos da pintura não se movem.
+- Marcador anelar para seleção. Noite é uma tonalização, sem redesenho das janelas ou do céu.
+- Os marcos financeiros permanecem; não há reconstrução da arte por estágio.
 
-## Renderização
+## Desempenho
 
-- cartoonLook.ts: pintura MeshBasicMaterial com sombreamento cel próprio. Sem iluminação PBR, reflexos, HDRI, ACES ou sombras projetadas. O normal da superfície escolhe somente entre a cor cheia e uma faixa com fator 0,78.
-- Paleta explícita para pele amarela, roupas, casa dos Simpsons, Flanders, Kwik-E-Mart, vegetação, asfalto e janelas. Demais cores recebem saturação maior.
-- cartoonFinish.ts: contornos a partir das diferenças de cor, com espessura em pixels de CSS. Alto/médio acrescentam FXAA; baixo mantém pintura e contornos. Sem bloom, vinheta, color grading ou desfoque.
-- Câmera ortográfica e zoom por enquadramento, sem redução de escala pela distância. Arraste ajustado ao tamanho da tela e à inclinação da câmera.
-- cartoonPeopleArt.ts: 12 desenhos, quatro poses cada, em um atlas Canvas2D 512 × 3072. 32 moradores usam Sprite com textura compartilhada e materiais por quadro. Animação e seleção continuam disponíveis. A arte é uma interpretação de fã produzida no código.
-- Água azul chapada com traços ondulados e linha costeira animados, sem reflexos ou mapa de profundidade.
-- Dia/noite por paleta compartilhada, janelas amarelas à noite. Clima ainda afeta céu e precipitação. Movimento reduzido pausa a animação; aba oculta pausa renderização.
-- HUD com fundos sólidos, bordas escuras e cores da cidade, sem efeito de vidro.
+A base da cidade custa uma malha de duas faces. Os sprites acrescentam 32 chamadas e 64 triângulos; o marcador, quando visível, acrescenta uma chamada. Não há pós-processamento ou passe de sombras. Isso é orçamento de geometria, não medição de GPU.
 
-## Orçamento e limites da verificação
+DPR e orçamento de pixels continuam automáticos: alto 1,5 / 3,6 milhões; médio 1,1 / 2,1 milhões; baixo 0,85 / 1,4 milhão. Alvo de 60 quadros/s, animação reduzida e pausa em aba oculta. FPS real e draw calls observadas no dispositivo ainda não foram medidos.
 
-Medição CPU: **51 malhas, 332.950 triângulos de malhas e 32 sprites**. Os sprites acrescentam 64 triângulos, totalizando aproximadamente 333 mil. Volumes invisíveis de seleção não entram na renderização. A versão anterior tinha 86 malhas e 412.880 triângulos.
+## Verificação
 
-Contornos custam um passe de tela inteira. Não há um passe de sombra nem HDRI para carregar. O alvo continua em 60 fps, sem garantia de desempenho: **FPS e chamadas reais ainda não foram medidos na GPU**.
+61 testes e compilação aprovados, sem alterar testes anteriores. A imagem foi inspecionada na saída da ferramenta e aprovada pelo usuário. O site integrado não foi aberto, conforme pedido dele. Os testes verificam dimensões da imagem, todas as regiões, seleção, carregamento, cancelamento e movimento dos sprites, além das finanças anteriores.
 
-| Nível | DPR máximo | Pixels internos | Acabamento |
-| --- | ---: | ---: | --- |
-| Alto | 1,5 | 3,6 milhões | Pintura + contornos + FXAA |
-| Médio | 1,1 | 2,1 milhões | Pintura + contornos + FXAA |
-| Baixo | 0,85 | 1,4 milhão | Pintura + contornos |
-
-O detector de qualidade ignora carregamento e aquecimento, reduz um nível abaixo de 50 fps médios e recupera depois de cinco janelas acima de 57 fps. A escolha manual é preservada. Nenhum destino é retirado para reduzir qualidade.
-
-Os 58 testes cobrem finanças, catálogo, seleção, rotas, câmera ortográfica, atlas compartilhado e alterações dos shaders de Three.js. Não compilam shaders em GPU nem verificam o Canvas2D visualmente. O proprietário pediu para avaliar o site e enviar screenshots, sem abrir navegador automaticamente.
-
-Conferir principalmente leitura dos contornos, cores, desenhos e caminhada dos personagens, seleção ao aproximar, visão geral, modo noturno e desempenho. Não há interiores, diálogos ou simulação viária completa.
+Conferir no dispositivo: alinhamento das regiões com fachadas, nitidez ao aproximar, enquadramento inicial e geral, rótulos, modo noturno, interação com personagens e fluidez. A imagem é uma composição de fã e regiões secundárias não garantem fachada canônica. Não há interiores ou simulação completa de cidade.

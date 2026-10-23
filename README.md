@@ -11,9 +11,9 @@ Recriação de fã de Springfield em Three.js para organizar finanças pessoais.
 
 ## A cidade
 
-106 destinos físicos: 47 locais nomeados e 59 casas de bairro. Inclui Evergreen Terrace, Kwik-E-Mart, Krusty Burger, Moe's, Lard Lad, escola, banco, biblioteca, prefeitura, hospital, igreja, usina nuclear, Duff, mansão Burns, estádio, lago, Krustyland, aeroporto e porto. A disposição é uma composição para este aplicativo, não um mapa canônico de todos os episódios.
+116 destinos financeiros: 47 locais nomeados, 59 residências e 10 personagens, com regiões de interação sobre o mapa ilustrado aprovado pelo proprietário. Inclui Evergreen Terrace, Kwik-E-Mart, Krusty Burger, Moe's, Lard Lad, escola, banco, biblioteca, prefeitura, hospital, igreja, usina nuclear, Duff, mansão Burns, estádio, lago, Krustyland, aeroporto e porto. A disposição é uma composição para este aplicativo, não um mapa canônico de todos os episódios.
 
-32 moradores desenhados em 2D, com quatro quadros de caminhada, incluindo 10 personagens selecionáveis: Homer, Marge, Bart, Lisa, Maggie, Apu, Krusty, Ned Flanders, Wiggum e Burns. Há 24 carros, ônibus escolar, três barcos, calçadas, faixas, sinaleiras e arborização.
+32 moradores desenhados em 2D, com quatro quadros de caminhada, incluindo 10 personagens selecionáveis: Homer, Marge, Bart, Lisa, Maggie, Apu, Krusty, Ned Flanders, Wiggum e Burns. Carros, ônibus, barcos e parte da população pertencem à pintura estática; os 32 sprites são uma camada animada separada.
 
 Arraste para explorar, use a roda para aproximar e clique nos prédios ou personagens. **Explorar Springfield** permite buscar todos os 116 destinos, filtrar por atividade e enquadrar a cidade inteira. Os rótulos flutuantes destacam os locais principais; os demais continuam clicáveis e disponíveis na busca.
 
@@ -33,22 +33,23 @@ Visitar não movimenta saldos. A confirmação no formulário existente é neces
 
 Entradas, saídas fixas e diárias, perfil com salário e benefício, vale separado, metas mensais, reserva, histórico, previsões e backup JSON. Persistência local em garagem:personal:v1, sem alteração dos registros anteriores. A integração de login e banco remoto permanece futura.
 
-Os cinco níveis residenciais continuam em src/homeJourney.ts. A cobertura de despesas por dinheiro + reserva libera marcos em 1, 3, 6 e 12 meses. A casa dos Simpsons e a cidade permanecem presentes em todos os níveis. O jardim ganha árvore e banco no nível 3. A maior conquista visual continua salva em garagem:vale:unlocked:v1.
+Os cinco níveis residenciais continuam em src/homeJourney.ts. A cobertura de despesas por dinheiro + reserva libera marcos em 1, 3, 6 e 12 meses. A casa dos Simpsons e a cidade permanecem presentes em todos os níveis. Os marcos permanecem no HUD; a pintura aprovada não é deformada nem reconstruída em cada estágio. A maior conquista visual continua salva em garagem:vale:unlocked:v1.
 
 ## Estrutura e qualidade
 
-- src/vale/cartoonLook.ts, cartoonFinish.ts, cartoonPeopleArt.ts: paleta, câmera, pintura cel, contornos e desenhos dos personagens.
-- src/vale/springfieldLocations.ts: catálogo de locais e personagens.
-- springfieldBuildings.ts, springfieldKit.ts: modelos próprios montados e agrupados por região/material, atlas de letreiros.
-- springfieldPeople.ts, springfieldTraffic.ts: moradores e veículos com recursos compartilhados.
-- springfieldCity.ts: cidade, terreno, oceano, barcos e seleção.
-- springfieldActions.ts: ação financeira de cada tipo de destino.
-- createVale.ts, Vale.tsx: câmera, navegação, busca, clima, rótulos, qualidade e renderização.
-- src/engine: motor financeiro existente, preservado nesta alteração.
+- public/art/springfield-illustrated-v1.png: arte de fã gerada com imagegen e aprovada pelo proprietário, 1536 × 1024.
+- illustratedLayout.ts: regiões de interação ajustadas à pintura, conversão de coordenadas e enquadramento.
+- illustratedSpringfield.ts: pintura como textura Three.js, seleção, personagens e descarte.
+- createVale.ts, Vale.tsx: câmera ortográfica vista de frente para a arte, zoom, arraste, busca, rótulos e qualidade automática.
+- springfieldLocations.ts, springfieldActions.ts: catálogo e ações financeiras preservados.
+- cartoonPeopleArt.ts: atlas compartilhado dos personagens animados.
+- Os módulos de arquitetura procedural e a vila nórdica permanecem como legado para comparação e testes; não são carregados pela cena ativa.
 
-Visual cartoon com cores chapadas, duas faixas de sombra, contornos escuros e câmera ortográfica. Personagens desenhados em atlas 2D compartilhado. Água com traços animados, sem reflexos realistas. Sem PBR, HDRI, bloom ou desfoque de miniatura na cena ativa. Qualidade automática reduz resolução e antialiasing, preservando os contornos e a cidade. Meta de 60 fps em desktop, ainda sem benchmark de GPU. O proprietário realiza a avaliação visual e pediu para não abrir navegador. Build e testes de CPU não substituem essa avaliação.
+A pintura é apresentada diretamente, sem filtros de contorno adicionais, cel shading, perspectiva, HDRI, bloom ou desfoque. O modo noturno aplica uma tonalização; não redesenha as janelas. O clima continua no cabeçalho, sem precipitação sobre a ilustração. Qualidade automática ajusta a resolução, preservando a arte e as interações.
 
-Veja [orçamento visual](docs/visual-quality.md), [créditos](CREDITS.md) e [passagem de bastão](HANDOFF.md). Os módulos e modelos antigos da vila nórdica permanecem como legado, fora da cena ativa.
+São 61 testes, incluindo os testes anteriores sem alteração. O proprietário pediu para avaliar o site e enviar screenshots, sem abrir navegador. Testes de CPU e compilação não comprovam a aparência final ou FPS. Não há benchmark de GPU nesta entrega.
+
+Veja [direção visual](docs/visual-quality.md), [créditos](CREDITS.md) e [passagem de bastão](HANDOFF.md).
 
 ## Supabase futuro
 

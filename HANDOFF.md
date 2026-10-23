@@ -1,39 +1,36 @@
 # Springfield: passagem de bastão
 
-## Orientação atual do proprietário
+## Decisão visual mais recente
 
-Projeto pessoal, desktop, Vite + React + TypeScript + Three.js. Direção visual mais recente: desenho cartoon semelhante à série, evitando aspecto de maquete ou render realista. A solicitação mais recente substitui os conceitos de startup, Califórnia e vila nórdica: criar uma Springfield ampla, com a casa dos Simpsons como lar, personagens e locais utilizáveis para as finanças pessoais. A preferência antiga por arte sem personagens de terceiros foi expressamente substituída por esse pedido.
+O proprietário rejeitou a grade procedural e o filtro cartoon. Foi gerada uma pintura de fã de Springfield com imagegen e ele respondeu: **Sim, seguir nessa direção**. Essa pintura é agora a base ativa. Não voltar a substituir as fachadas por caixas 3D, não inclinar a textura e não reaplicar filtros de contorno à arte.
 
-Responder em português brasileiro, direto, sem travessão. Não abrir navegador, Playwright nem capturar screenshots: o proprietário testa e envia imagens. Atualizações verificadas podem ser enviadas diretamente a main de gustavodiaas/Vale-da-Serra. Push não comprova deploy Vercel.
+Arquivo: public/art/springfield-illustrated-v1.png, 1536 × 1024, 3.849.177 bytes. Prompt em public/art/ART-PROMPT.md. Interpretação de fã, sem pretensão de cartografia canônica. Não chamar de modelo 3D ou mapa oficial. As personagens da série estão presentes na própria pintura e nos sprites adicionais.
 
-## Implementado
+## Fluxo do proprietário
 
-- 106 construções / áreas selecionáveis: 47 locais nomeados e 59 casas de bairro; dez personagens também selecionáveis. Disposição própria para o aplicativo, sem pretensão de cartografia canônica.
-- 32 moradores em sprites 2D desenhados por código, com quatro quadros por estilo e atlas único, incluindo Homer, Marge, Bart de skate, Lisa, Maggie, Apu, Krusty, Ned, Wiggum e Burns. Percursos com pausas e retorno; quatro personagens ficam próximos dos seus locais.
-- 24 carros e um ônibus escolar em trajetos retangulares, três barcos, arborização, calçadas, faixas e sinaleiras decorativas. As sinaleiras ainda não controlam o tráfego.
-- Letreiros em atlas único; geometrias estáticas agrupadas por região/material; peças de personagens e veículos compartilhadas. Não há downloads de modelos de Springfield.
-- Busca e categorias no menu Explorar Springfield; seleção enquadra o destino e abre sua ação. Botão de visão geral; zoom e arraste com amortecimento; rótulos DOM para locais principais.
-- Todos os destinos têm ação em springfieldActions.ts, ligada aos formulários e painéis existentes. Não há débito por visita. Kwik-E-Mart / Apu usam vale por padrão, outros comércios usam dinheiro. O formulário permite escolher a carteira.
-- Casa dos Simpsons preservada em todos os cinco estágios. Jardim adicional a partir do nível 3; não transformar a casa em startup nem trocar por torre.
+Português brasileiro, sem travessão. Ele faz a avaliação visual e envia screenshots. Não abrir navegador, Playwright ou fazer captura de tela sem pedido posterior. Alterações verificadas podem ir diretamente a main de gustavodiaas/Vale-da-Serra. Push não comprova deploy Vercel.
 
-## Finanças e dados
+## Implementação ativa
 
-Não alterar src/engine ou os testes existentes sem um novo pedido. Dados e backup compatíveis: chave garagem:personal:v1. Lançamentos em centavos; entradas, fixas, diários, vale separado, reserva, resgates, perfil, salário/benefício previstos, meta e avisos. Casas e bairros compartilham o controle financeiro do próprio usuário.
+- illustratedSpringfield.ts monta uma textura sobre um plano Three.js, com uma câmera ortográfica diretamente acima dele. A imagem já contém a perspectiva desenhada; não adicionar outra.
+- illustratedLayout.ts guarda as regiões medidas contra a pintura aprovada. São 116 destinos preservados do catálogo: 47 locais, 59 residências e dez personagens. Regiões secundárias são associações próprias a edifícios da composição, não uma alegação de fachada canônica.
+- Os principais pontos foram associados à casa dos Simpsons, Flanders, Kwik-E-Mart, Krusty Burger, Moe's, Android's Dungeon, Lard Lad, escola, Bowlarama, Aztec, banco, prefeitura, mansão, igreja, lago e usina da ilustração.
+- 32 sprites adicionais percorrem rotas manuais sobre os passeios. Cinco personagens permanecem próximos de seus destinos. Carros, barcos e pessoas pintados no fundo são estáticos, sem simulação veicular nesta versão.
+- A seleção marca o destino, abre a ação e a busca enquadra sua região. Zoom e arraste preservados. Visão geral enquadra a composição inteira. A cena principal tem duas faces, mais os sprites e o marcador de seleção.
+- createVale.ts preserva os métodos públicos, qualidade automática, instrumentação e limite de 60 quadros/s. Noite é uma tonalização da pintura; clima real permanece no cabeçalho. Sem HDRI, iluminação física, névoa, chuva 3D ou pós-processamento.
+- Os níveis da casa continuam no HUD e salvos em garagem:vale:unlocked:v1. A pintura permanece íntegra em todos os estágios; não há ampliação visual de jardim nesta versão.
+- Módulos anteriores springfieldCity.ts, arquitetura procedural, shaders cartoon e vila nórdica permanecem no repositório e nos testes como legado. Não confundir seus resultados de geometria com a cena ativa.
 
-src/homeJourney.ts preserva nomes residenciais e marcos de cobertura em 1, 3, 6 e 12 meses. IDs antigos permanecem por compatibilidade. O selo reflete o nível calculado; a maior conquista visual fica em garagem:vale:unlocked:v1.
+## Finanças e API
 
-## Cena e API
+Não alterar src/engine ou testes existentes sem novo pedido. Dados compatíveis em garagem:personal:v1: centavos, entradas, fixas, diários, salário/benefício, vale separado, reserva, resgates, meta, histórico e backup. A imagem não grava dinheiro; ações passam pelos formulários existentes.
 
-Cena ativa em springfieldCity.ts, catálogo em springfieldLocations.ts, arquitetura em springfieldBuildings.ts, kit e agrupamento em springfieldKit.ts, pessoas e carros nos respectivos módulos. A vila nórdica, modelos CC0 e testes anteriores permanecem como legado, fora da cena atual. fjordWater.ts aceita sampler de relevo e extensão opcionais; valores padrão anteriores preservados.
+API preservada: setStage, setWeather, setLabel, zoom, reset, dispose, setQuality, setTimeOfDay, focusLocation, overview. Metadados de seleção preservados. Os cinco níveis residenciais continuam calculados por src/homeJourney.ts; IDs antigos são compatibilidade interna.
 
-API preservada: setStage, setWeather, setLabel, zoom, reset, dispose. Opções existentes: setQuality e setTimeOfDay. Acrescentados focusLocation e overview. Seleção aceita metadados opcionais do destino como segundo argumento.
+## Verificação e limites
 
-createVale.ts usa câmera ortográfica e não aplica tone mapping, HDRI ou sombras realistas. cartoonLook.ts fornece paleta viva e pintura sem reflexos, com duas faixas de sombra. cartoonFinish.ts acrescenta contornos em todos os níveis e FXAA no alto/médio, sem bloom, vinheta ou desfoque. cartoonPeopleArt.ts desenha o atlas de personagens com Canvas2D; springfieldPeople.ts os anima e compartilha a textura. Liberar todos os materiais do atlas com city.people.dispose(). desktopQuality.ts preserva ajuste automático de resolução. Não afirmar desempenho de GPU sem medição.
+61 testes aprovados. Os 58 anteriores permanecem intactos; três novos verificam a imagem, regiões, seleção, recursos e cancelamento de carregamento. Compilação de TypeScript/Vite aprovada. Nenhum navegador foi aberto. FPS e aparência integrada não foram medidos/verificados na GPU.
 
-## Validação e limites
+Não há interiores, diálogos, física de trânsito, todas as construções da série ou geometria independente por edifício da pintura. A precisão visual das regiões e a legibilidade ao ampliar precisam da conferência do proprietário.
 
-Os 55 testes anteriores permanecem intactos, com três verificações adicionais de câmera ortográfica, shaders e sprites, totalizando 58. Testes adicionais verificam catálogo, seleção de todos os destinos, ações financeiras, animação, cancelamento e orçamento. Build inclui TypeScript e Vite.
-
-Sem navegador ou avaliação visual automática, conforme pedido. Ainda não há interiores 3D, conversas, missões, trânsito com colisão ou todos os locais já mostrados na série. Arte temática é interpretação estilizada em código, sem extração de jogos ou assets oficiais. Não apresentar a temática como CC0; ver CREDITS.md.
-
-Supabase permanece futuro. Não executar migrações, criar login ou mudar persistência em ajustes visuais. Moedas ainda são a contagem visual existente, sem loja nem economia independente.
+Supabase e loja de moedas continuam futuros. Não alterar persistência nem executar migrações em ajustes visuais. A arte temática não é CC0; ver CREDITS.md.
