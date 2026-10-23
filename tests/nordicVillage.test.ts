@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildNordicVale, NORDIC_ANCHORS } from '../src/vale/nordicVillage';
-import { heightAt } from '../src/vale/nordicTerrain';
+import { heightAt, NORDIC_VIEW } from '../src/vale/nordicTerrain';
 
 const directory = resolve('public/models/nordic');
 beforeAll(() => vi.stubGlobal('ProgressEvent', class extends Event {
@@ -32,6 +32,18 @@ async function loadLocal(name: string) {
 }
 
 describe('Nordic scene resource and placement budget', () => {
+  it('keeps the expanded village terrace flat and frames the western cliff on the left', () => {
+    for (const x of [-58, -30, 0, 40]) for (const z of [-63, -30, 15, 37]) expect(heightAt(x, z)).toBeCloseTo(1.8, 4);
+    const camera = new THREE.PerspectiveCamera(36, 16 / 9, 1, 700);
+    const { radius, polar, azimuth, target } = NORDIC_VIEW;
+    camera.position.set(target[0] + radius * Math.sin(polar) * Math.cos(azimuth), target[1] + radius * Math.cos(polar), target[2] + radius * Math.sin(polar) * Math.sin(azimuth));
+    camera.lookAt(new THREE.Vector3(...target)); camera.updateMatrixWorld();
+    const cliff = new THREE.Vector3(-100, heightAt(-100, -48), -48).project(camera);
+    const village = new THREE.Vector3(0, 1.8, 0).project(camera);
+    const fjord = new THREE.Vector3(85, 0, 0).project(camera);
+    expect(cliff.x).toBeLessThan(village.x - .3);
+    expect(fjord.x).toBeGreaterThan(village.x + .3);
+  });
   it('loads all artist models, keeps the 11 financial destinations, and fits the scene budget', async () => {
     const scene = new THREE.Scene();
     const valley = buildNordicVale(scene, loadLocal);

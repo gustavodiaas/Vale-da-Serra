@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { CityAnchor, CityBuilding } from './siliconValley';
-import { createNordicTerrain, heightAt } from './nordicTerrain';
+import { createNordicTerrain, heightAt, villagePosition, VILLAGE_LAYOUT } from './nordicTerrain';
+import { createCottageGardens } from './cottageGardens';
 
 type House = 'house-a' | 'house-b' | 'house-c' | 'lodge';
 type Plot = { id: CityAnchor['id']; name: string; x: number; z: number; model: House; width: number; color: string; min: number; turn?: number };
@@ -19,14 +20,19 @@ const PLOTS: Plot[] = [
   { id: 'mercado', name: 'Mercado do Porto', x: 22, z: -6, model: 'house-c', width: 12, color: '#536e64', min: 1 },
   { id: 'padaria', name: 'Padaria do Vale', x: -2, z: 17, model: 'house-b', width: 10, color: '#be7856', min: 1 },
 ];
+for (const plot of PLOTS) [plot.x, plot.z] = villagePosition(plot.x, plot.z);
 export const NORDIC_ANCHORS: CityAnchor[] = PLOTS.map(p => ({ id: p.id, name: p.name, position: [p.x, heightAt(p.x, p.z) + 11, p.z], min: p.min }));
 
 /** Bake the artist's geometry and palette into one surface per model. */
-export function bakeModel(source: THREE.Object3D, wall?: string) {
+export function bakeModel(source: THREE.Object3D, wall?: string, part: 'body' | 'windows' | 'all' = 'all') {
   source.updateMatrixWorld(true);
+  const sourceBounds = new THREE.Box3().setFromObject(source);
   const parts: THREE.BufferGeometry[] = [];
   source.traverse(obj => {
     if (!(obj instanceof THREE.Mesh)) return;
+    const surfaces: THREE.Material[] = Array.isArray(obj.material) ? obj.material : [obj.material];
+    const windowSurface = surfaces.every(m => m.name.toLowerCase().includes('windows'));
+    if ((part === 'body' && windowSurface) || (part === 'windows' && !windowSurface)) return;
     const geometry = obj.geometry.index ? obj.geometry.toNonIndexed() : obj.geometry.clone();
     geometry.applyMatrix4(obj.matrixWorld);
     const positions = geometry.getAttribute('position');
@@ -38,8 +44,10 @@ export function bakeModel(source: THREE.Object3D, wall?: string) {
       const name = material.name.toLowerCase();
       const color = material.color.clone();
       if (wall && /plaster|beige|wood_side/.test(name)) color.set(wall);
-      if (wall && /rooftiles/.test(name)) color.set('#47574a');
-      if (name.includes('windows')) color.set('#b9c9bf');
+      if (wall && /rooftiles/.test(name)) color.set(wall === '#d1cdb9' || wall === '#c9c2a6' ? '#9b6250' : wall === '#536e64' ? '#555e65' : '#58654b');
+      if (wall && name === 'wood') color.set('#795944');
+      if (wall && name === 'wood_light') color.set('#e3cfa6');
+      if (name.includes('windows')) color.set('#ffe0a5');
       for (let i = group.start; i < Math.min(positions.count, group.start + group.count); i++) {
         colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
       }
@@ -49,11 +57,11 @@ export function bakeModel(source: THREE.Object3D, wall?: string) {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.clearGroups(); parts.push(geometry);
   });
+  if (!parts.length) return new THREE.BufferGeometry();
   const result = mergeGeometries(parts);
   parts.forEach(p => p.dispose());
   if (!result) throw new Error('O modelo 3D não contém uma superfície compatível.');
-  result.computeBoundingBox();
-  const box = result.boundingBox!;
+  const box = sourceBounds;
   result.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
   return result;
 }
@@ -89,17 +97,13 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geometry.setIndex(indices); geometry.computeVertexNormals();
     const mesh = new THREE.Mesh(geometry, pathMaterial); mesh.receiveShadow = true; root.add(mesh);
   }
-  path([[-45, -88], [-15, -59], [10, -30], [10, 6], [12, 29]], 3.2);
-  path([[-38, 5], [-14, 5], [10, 6], [33, 5]], 2.6);
-  path([[-39, -19], [-15, -19], [10, -17], [35, -17]], 2.5);
-  path([[-36, -35], [-12, -34], [10, -33], [32, -33]], 2.5);
-  for (const plot of PLOTS) path([[plot.x, plot.z + 2], [plot.x, plot.z + 6], [plot.x < 0 ? -15 : 10, plot.z + 8]], 1.25);
+  path([[13.5, -91], [13.5, -48], [13.5, -8], [13.5, 28], [13.5, 52]], 3.2);
   const wood = new THREE.MeshStandardMaterial({ color: '#7d6650', roughness: .9 });
   const deck = new THREE.InstancedMesh(new THREE.BoxGeometry(5, .25, .47), wood, 45);
   const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(.13, .16, 4, 8), wood, 16);
   const matrix = new THREE.Matrix4();
-  for (let i = 0; i < 45; i++) { matrix.makeTranslation(12, 1.15, 28 + i * .5); deck.setMatrixAt(i, matrix); }
-  for (let i = 0; i < 16; i++) { matrix.makeTranslation(12 + (i % 2 ? 2.3 : -2.3), -.7, 29 + Math.floor(i / 2) * 2.9); posts.setMatrixAt(i, matrix); }
+  for (let i = 0; i < 45; i++) { matrix.makeTranslation(13.5, 2, 51 + i * .5); deck.setMatrixAt(i, matrix); }
+  for (let i = 0; i < 16; i++) { matrix.makeTranslation(13.5 + (i % 2 ? 2.3 : -2.3), 0, 52 + Math.floor(i / 2) * 2.9); posts.setMatrixAt(i, matrix); }
   deck.castShadow = deck.receiveShadow = true; posts.castShadow = true; root.add(deck, posts);
 
   const ready = (async () => {
@@ -113,18 +117,27 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     const sources = new Map<string, THREE.Group>();
     results.forEach((r, i) => { if (r.status === 'fulfilled') sources.set(names[i]!, r.value.scene); });
     const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .88 });
+    const glow = new THREE.MeshStandardMaterial({ color: '#ffe0a5', emissive: '#ffbb68', emissiveIntensity: .18, roughness: .45 }); windows.push(glow);
     const geometries = new Map<string, THREE.BufferGeometry>();
     function model(name: string, width: number, color?: string) {
       const key = `${name}:${color ?? ''}`;
       let geometry = geometries.get(key);
-      if (!geometry) { geometry = bakeModel(sources.get(name)!, color); geometries.set(key, geometry); }
+      if (!geometry) { geometry = bakeModel(sources.get(name)!, color, color ? 'body' : 'all'); geometries.set(key, geometry); }
       geometry.computeBoundingBox();
       const mesh = new THREE.Mesh(geometry, surface);
       const scale = width / Math.max(.01, geometry.boundingBox!.max.x - geometry.boundingBox!.min.x);
-      mesh.scale.setScalar(scale); mesh.castShadow = mesh.receiveShadow = true;
-      return mesh;
+      mesh.castShadow = mesh.receiveShadow = true;
+      const group = new THREE.Group(); group.add(mesh); group.scale.set(scale, scale * (color ? .88 : 1), scale);
+      if (color) {
+        const windowKey = `${name}:windows`;
+        let panes = geometries.get(windowKey);
+        if (!panes) { panes = bakeModel(sources.get(name)!, undefined, 'windows'); geometries.set(windowKey, panes); }
+        if (panes.getAttribute('position')) group.add(new THREE.Mesh(panes, glow));
+      }
+      return group;
     }
     try {
+      const gardens: { x: number; front: number; width: number }[] = [];
       for (const [i, plot] of PLOTS.entries()) {
         const mesh = model(plot.model, plot.width, plot.color);
         const group = new THREE.Group(); group.name = plot.id;
@@ -132,14 +145,21 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         buildings.push({ group, id: plot.id, min: plot.min, scale: 1 });
         const box = new THREE.Box3().setFromObject(group);
         NORDIC_ANCHORS[i]!.position[1] = box.max.y + 1.5;
+        const front = box.max.z + 2;
+        path([[plot.x, box.max.z - .5], [plot.x, front], [13.5, front]], 1.4);
+        if (plot.min === 1) gardens.push({ x: plot.x, front: box.max.z + .75, width: plot.width });
       }
       // A few waterfront homes make the shore inhabited without a huge city.
-      for (const [i, x] of [-30, -17, -5].entries()) {
-        const house = model('house-a', 7, ['#954940', '#c9c2a6', '#657c72'][i]);
-        house.position.set(x, heightAt(x, 29), 29); root.add(house);
+      for (const [i, x] of [-43, -25, -7].entries()) {
+        const house = model('house-b', 8, ['#954940', '#c9c2a6', '#657c72'][i]);
+        house.position.set(x, heightAt(x, 41), 41); root.add(house);
+        const box = new THREE.Box3().setFromObject(house);
+        gardens.push({ x, front: box.max.z + .75, width: 8 });
       }
-      for (const [x, z] of [[29, 1], [29, 7]]) { const stall = model('market', 4); stall.position.set(x!, heightAt(x!, z!), z!); root.add(stall); }
-      for (const [x, z] of [[-13, 10], [5, 24], [18, 26], [-35, 6], [32, 11]]) { const bench = model('bench', 2.4); bench.position.set(x!, heightAt(x!, z!), z!); root.add(bench); }
+      path([[-48, 48], [-24, 48], [-4, 48], [13.5, 48], [37, 47]], 2.1);
+      for (const [x, z] of [[43, 1], [43, 8]]) { const stall = model('market', 4); stall.position.set(x!, heightAt(x!, z!), z!); root.add(stall); }
+      for (const [x, z] of [[-17, 13], [7, 34], [24, 39], [-47, 8], [43, 19]]) { const bench = model('bench', 2.4); bench.position.set(x!, heightAt(x!, z!), z!); root.add(bench); }
+      createCottageGardens(root, gardens, glow);
       for (const [asset, count] of [['rock-a', 22], ['rock-b', 18], ['grass-large', 48]] as const) {
         const source = sources.get(asset)!; source.updateMatrixWorld(true);
         source.traverse(obj => {
@@ -153,8 +173,8 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
           const instances = new THREE.InstancedMesh(geometry, material, count);
           const transform = new THREE.Object3D();
           for (let i = 0; i < count; i++) {
-            const z = asset === 'grass-large' ? -67 + (i * 17.31 % 100) : -85 + i * 5.4;
-            const x = asset === 'grass-large' ? -53 + (i * 19.73 % 91) : 40 + Math.sin(z * .027) * 7;
+            const z = asset === 'grass-large' ? -80 + (i * 17.31 % 128) : -85 + i * 6.2;
+            const x = asset === 'grass-large' ? -78 + (i * 19.73 % 130) : VILLAGE_LAYOUT.bankX - 3 + Math.sin(z * .027) * 7;
             transform.position.set(x, heightAt(x, z) + .1, z);
             transform.rotation.y = i * 2.399;
             transform.scale.setScalar(baseScale * (.75 + (i % 5) * .15)); transform.updateMatrix(); instances.setMatrixAt(i, transform.matrix);

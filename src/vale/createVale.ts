@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
 import type { CityAnchor } from './siliconValley';
 import { buildNordicVale, NORDIC_ANCHORS } from './nordicVillage';
+import { NORDIC_VIEW } from './nordicTerrain';
 
 export type ValeStage = 1 | 2 | 3 | 4 | 5;
 export type LabelId = CityAnchor['id'];
@@ -88,7 +89,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     hemi.intensity = 0.48 * Math.PI * light;
     sun.color.set(night ? 0x9fb4ff : 0xfff1dc);
     sun.intensity = 1.1 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.85);
-    for (const m of city.windows) m.emissiveIntensity = night ? 0.7 : 0;
+    for (const m of city.windows) m.emissiveIntensity = night ? 1 : .18;
   };
 
   const cam = new THREE.PerspectiveCamera(36, 1, 1, 700);
@@ -111,11 +112,11 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   });
 
   // câmera: ângulo fixo estilo mapa, arrastar para mover, roda para zoom
-  const th = 0.785;
-  const ph = 1;
-  let rad = 142;
-  let radT = 142;
-  const home = new THREE.Vector3(0, 6, -6);
+  const th = NORDIC_VIEW.azimuth;
+  const ph = NORDIC_VIEW.polar;
+  let rad: number = NORDIC_VIEW.radius;
+  let radT: number = NORDIC_VIEW.radius;
+  const home = new THREE.Vector3(...NORDIC_VIEW.target);
   const tgt = home.clone();
   let drag: { x: number; y: number } | null = null;
   let press: { x: number; y: number; moved: boolean } | null = null;
@@ -150,7 +151,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     press = null;
     renderer.setPixelRatio(renderRatio);
   };
-  const clampRad = (v: number) => Math.min(180, Math.max(30, v));
+  const clampRad = (v: number) => Math.min(215, Math.max(35, v));
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     radT = clampRad(radT * (1 + e.deltaY * 0.001));
@@ -290,7 +291,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     },
     reset() {
       tgt.copy(home);
-      radT = 142;
+      radT = NORDIC_VIEW.radius;
     },
     dispose() {
       disposed = true;
