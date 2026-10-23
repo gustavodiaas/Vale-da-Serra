@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { cityKit, createWalkers } from './cityLife';
+import { createSignals } from './cityTraffic';
 
 export interface CityBuilding { group: THREE.Group; min: number; scale: number; id: CityAnchor['id'] }
 export interface CityCar { mesh: THREE.Group; axis: 'x' | 'z'; road: number; direction: number; position: number; speed: number }
@@ -22,6 +24,8 @@ export const CITY_ANCHORS: CityAnchor[] = [
 
 /** Physical materials, detailed architecture and instanced vegetation, all local. */
 export function buildSiliconValley(scene: THREE.Scene) {
+  const kit = cityKit();
+  const parks: { group: THREE.Group; until: number }[] = [];
   let seed = 317;
   const random = () => { seed = seed * 16807 % 2147483647; return seed / 2147483647; };
   const windows: THREE.MeshStandardMaterial[] = [];
@@ -47,7 +51,8 @@ export function buildSiliconValley(scene: THREE.Scene) {
       ctx.fillStyle = color;
       ctx.fillRect(0, 0, 256, 256);
       for (let i = 0; i < 16000; i++) {
-        ctx.fillStyle = random() > .5 ? `rgba(255,255,255,${random() * .13})` : `rgba(0,0,0,${random() * .13})`;
+        const opacity = kind === 'grass' ? .025 : .075;
+        ctx.fillStyle = random() > .5 ? `rgba(255,255,255,${random() * opacity})` : `rgba(0,0,0,${random() * opacity})`;
         ctx.fillRect(random() * 256, random() * 256, 1 + random() * 2, 1 + random() * 2);
       }
       if (kind === 'roof') {
@@ -66,7 +71,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
     const map = new THREE.CanvasTexture(canvas);
     map.colorSpace = THREE.SRGBColorSpace;
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.set(kind === 'grass' ? 30 : kind === 'asphalt' ? 5 : 1, kind === 'grass' ? 30 : kind === 'asphalt' ? 5 : 1);
+    map.repeat.set(kind === 'grass' ? 12 : kind === 'asphalt' ? 5 : 1, kind === 'grass' ? 12 : kind === 'asphalt' ? 5 : 1);
     map.anisotropy = 4;
     return new THREE.MeshStandardMaterial({ map, roughness: kind === 'roof' ? .9 : 1, bumpMap: map, bumpScale: kind === 'grass' ? .04 : .015 });
   }
@@ -77,7 +82,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
   const tileRoof = texture('roof', '#9b614b');
   const asphalt = texture('asphalt', '#515758');
   const concrete = texture('concrete', '#c9c9be');
-  const grass = texture('grass', '#788c58');
+  const grass = texture('grass', '#839e6a');
   const white = material(0xe5e2d8);
   const timber = material(0x795e46);
   const steel = material(0x394548, .5);
@@ -126,14 +131,26 @@ export function buildSiliconValley(scene: THREE.Scene) {
   }
   function palm(x: number, z: number, height = 8) {
     const g = new THREE.Group(); g.position.set(x, 0, z); staticCity.add(g);
-    cylinder(g, .11, .23, height, timber, 0, height / 2, 0);
+    kit.tube(g, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(.15, height * .45, 0), new THREE.Vector3(.4, height, .15)], .17, 0x9c805e);
+    for (let i = 1; i < 12; i++) {
+      const collar = kit.ring(g, .175, .018, 0x8b7256, i * .035, height * i / 12, .015 * i); collar.rotation.x = Math.PI / 2;
+    }
+    for (let i = 0; i < 3; i++) kit.ball(g, 0x987549, .4 + Math.cos(i * 2.1) * .2, height - .15, .15 + Math.sin(i * 2.1) * .2, .22);
     for (let i = 0; i < 9; i++) {
       const angle = i * Math.PI * 2 / 9;
-      const shape = new THREE.Shape();
-      shape.moveTo(0, 0); shape.quadraticCurveTo(.65, -1, .12, -3.3); shape.quadraticCurveTo(-.5, -1, 0, 0);
-      const blade = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8), palmMaterial);
-      blade.rotation.x = -1.27; blade.position.y = height; blade.castShadow = true;
-      const pivot = new THREE.Group(); pivot.rotation.y = angle; pivot.add(blade); g.add(pivot);
+      const point = (t: number) => new THREE.Vector3(.4 + Math.cos(angle) * t * 4, height + Math.sin(t * Math.PI) * 1.25 - t * t * 1.1, .15 + Math.sin(angle) * t * 4);
+      kit.tube(g, Array.from({ length: 7 }, (_, j) => point(j / 6)), .035, 0x7a8e47);
+      for (let j = 1; j < 12; j++) for (const side of [-1, 1]) {
+        const t = j / 13;
+        const start = point(t - .04), end = point(t + .045), tip = point(Math.min(1, t + .12));
+        tip.x += -Math.sin(angle) * side * Math.sin(t * Math.PI) * .7;
+        tip.z += Math.cos(angle) * side * Math.sin(t * Math.PI) * .7;
+        tip.y -= .15;
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute([...start.toArray(), ...end.toArray(), ...tip.toArray()], 3));
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, .5, 1], 2)); geometry.computeVertexNormals();
+        const blade = new THREE.Mesh(geometry, palmMaterial); blade.castShadow = true; g.add(blade);
+      }
     }
   }
   function hedge(parent: THREE.Object3D, x: number, z: number, width: number) {
@@ -201,7 +218,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
   }
   function office(parent: THREE.Object3D, w: number, d: number, floors: number, accent = timber) {
     const h = floors * 3.1;
-    block(parent, w, h, d, stucco, 0, h / 2 + .2, 0);
+    kit.rounded(parent, w, h, d, 0xdce3df, 0, h / 2 + .2, 0, .6, .65);
     // Recessed glazing, mullions and projecting slabs give facades actual depth.
     for (const side of [-1, 1]) {
       const facade = new THREE.Group(); facade.rotation.y = side === 1 ? 0 : Math.PI; parent.add(facade);
@@ -226,6 +243,16 @@ export function buildSiliconValley(scene: THREE.Scene) {
     block(parent, 3.4, .22, 2.4, accent, 0, 3, d / 2 + .8);
     block(parent, 2.6, 2.6, .2, glass, 0, 1.55, d / 2 + .2);
     for (const x of [-w / 2 + .4, w / 2 - .4]) block(parent, .35, h, .4, accent, x, h / 2, d / 2 + .28);
+    // Recessed roof terraces, sun fins and planted balconies soften repeated slabs.
+    for (const side of [-1, 1]) {
+      kit.rounded(parent, w + .6, .32, 1.2, 0xe8dec8, 0, h + .42, side * (d / 2 - .1), .12);
+      for (const x of [-w / 3, 0, w / 3]) { kit.rounded(parent, 1.5, .45, .7, 0xa6937a, x, h + .75, side * (d / 2 - .3), .12); kit.ball(parent, 0x648557, x, h + 1.13, side * (d / 2 - .3), .65, .45, .4); }
+    }
+    if (floors >= 4) for (let floor = 2; floor < floors; floor += 3) {
+      const balcony = kit.rounded(parent, w * .45, .2, 1.8, 0xd2bb97, w * .15, floor * 3.1, d / 2 + .6, .15);
+      balcony.castShadow = true;
+      kit.rounded(parent, w * .45, .55, .07, 0x8aabb0, w * .15, floor * 3.1 + .4, d / 2 + 1.4, .03, .25);
+    }
     return h;
   }
   function parking(x: number, z: number, w = 14, d = 9) {
@@ -236,16 +263,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
     }
   }
   function car(color: number) {
-    const g = new THREE.Group(); const paint = material(color, .32);
-    block(g, 3.3, .62, 1.5, paint, 0, .65, 0);
-    const cabin = block(g, 1.7, .65, 1.34, glass, -.2, 1.18, 0);
-    cabin.rotation.z = -.05;
-    block(g, 1.3, .08, 1.35, paint, -.25, 1.54, 0);
-    for (const x of [-1, 1]) for (const z of [-.78, .78]) {
-      const wheel = cylinder(g, .33, .33, .18, steel, x, .37, z); wheel.rotation.x = Math.PI / 2;
-    }
-    for (const z of [-.5, .5]) { block(g, .06, .16, .32, lit, 1.67, .8, z); block(g, .06, .13, .32, material(0x9c3831), -1.67, .8, z); }
-    return g;
+    return kit.car(color, color % 2);
   }
 
   // Four continuous avenues and cross streets form walkable, occupied blocks.
@@ -288,7 +306,17 @@ export function buildSiliconValley(scene: THREE.Scene) {
   }
   const sand = texture('concrete', '#dfc58f');
   coastalSurface(96, 400, sand, -.005, staticCity);
-  const ocean = new THREE.MeshPhysicalMaterial({ color: 0x247d99, roughness: .3, metalness: .15, clearcoat: .6, clearcoatRoughness: .25 });
+  const normalPixels = new Uint8Array(128 * 128 * 4);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const i = (y * 128 + x) * 4;
+    const u = x / 128 * Math.PI * 2, v = y / 128 * Math.PI * 2;
+    const normal = new THREE.Vector3(Math.cos(u * 4 + Math.sin(v * 2)) * .35, Math.sin(v * 3 + Math.cos(u * 3)) * .3, 1).normalize();
+    normalPixels[i] = Math.round((normal.x * .5 + .5) * 255); normalPixels[i + 1] = Math.round((normal.y * .5 + .5) * 255); normalPixels[i + 2] = Math.round((normal.z * .5 + .5) * 255); normalPixels[i + 3] = 255;
+  }
+  const seaNormals = new THREE.DataTexture(normalPixels, 128, 128);
+  seaNormals.wrapS = seaNormals.wrapT = THREE.RepeatWrapping; seaNormals.repeat.set(.13, .13); seaNormals.needsUpdate = true;
+  seaNormals.magFilter = THREE.LinearFilter; seaNormals.minFilter = THREE.LinearMipmapLinearFilter; seaNormals.generateMipmaps = true;
+  const ocean = new THREE.MeshPhysicalMaterial({ color: 0x278ca5, roughness: .25, metalness: .15, clearcoat: .6, clearcoatRoughness: .25, normalMap: seaNormals, normalScale: new THREE.Vector2(.45, .45) });
   coastalSurface(113, 500, ocean, .015, water);
   coastalSurface(110.5, 116, new THREE.MeshStandardMaterial({ color: 0x68b6ba, roughness: .5, transparent: true, opacity: .65, depthWrite: false }), .035, water);
   block(staticCity, 2.8, .13, 188, concrete, 96, .08, 0);
@@ -300,6 +328,22 @@ export function buildSiliconValley(scene: THREE.Scene) {
     cylinder(parasol, .04, .04, 2.7, timber, 0, 1.35, 0);
     cylinder(parasol, .1, 1.5, .5, z % 24 ? white : material(0xcb7d59), 0, 2.8, 0);
     for (const side of [-1, 1]) block(parasol, .8, .15, 2.2, white, side, .3, 1.8);
+  }
+  // Dunes, beach kiosks, curved lounge chairs and surfboards create a lived-in coast.
+  for (let i = 0; i < 12; i++) {
+    const z = -72 + i * 13;
+    kit.ball(staticCity, 0xe3c994, 100.5, .18, z, 2.5, .35, 3.4);
+    for (let j = 0; j < 5; j++) kit.tube(staticCity, [new THREE.Vector3(100.5 + j * .22, .25, z), new THREE.Vector3(100.7 + j * .22, .9 + j % 2 * .3, z + .15), new THREE.Vector3(100.9 + j * .22, 1.05, z + .4)], .035, 0x9d9b57);
+    const board = kit.ball(staticCity, i % 2 ? 0xd18165 : 0x709fa8, 105, .45, z + 4, .45, .12, 1.8); board.rotation.y = .3;
+    kit.rounded(staticCity, .06, .03, 3, 0xf3ddad, 105, .58, z + 4, .01);
+  }
+  for (const z of [-32, 28]) {
+    const kiosk = new THREE.Group(); kiosk.position.set(99, .2, z); staticCity.add(kiosk);
+    kit.rounded(kiosk, 3.2, 2.8, 3, z > 0 ? 0x8eada9 : 0xcf9a7c, 0, 1.4, 0, .3);
+    kit.rounded(kiosk, 3.8, .32, 3.6, 0xf1d4a1, 0, 3, 0, .16);
+    kit.rounded(kiosk, 2.6, 1.2, .12, 0x365964, 0, 1.8, 1.55, .14);
+    kit.rounded(kiosk, 3, .15, .65, 0xdfbe8c, 0, 1.1, 1.7, .08);
+    sign(kiosk, z > 0 ? 'SURF CLUB' : 'GELATO', 0, 2.85, 1.85, 2.8, '#927356');
   }
   // Boardwalk pier links directly to the eastbound avenue.
   block(staticCity, 37, .28, 5, timber, 111, .5, 0);
@@ -387,19 +431,32 @@ export function buildSiliconValley(scene: THREE.Scene) {
     block(g, 19, .15, 7, concrete, 0, .15, 9);
   });
   headquarters('mercado', (g) => {
-    block(g, 23, 4.6, 15, stucco, 0, 2.5, 0);
-    block(g, 24, .4, 16, material(0x477550), 0, 4.9, 0);
+    kit.rounded(g, 23, 4.6, 15, 0xf0dfbc, 0, 2.5, 0, .65);
+    kit.rounded(g, 24, .55, 16, 0x477550, 0, 4.9, 0, .25);
     for (let x = -9; x <= 9; x += 3) windowPane(g, x, 2, 7.6, 2.5, 2.5);
     block(g, 23.5, .8, 2.3, material(0x477550), 0, 3.8, 8.2);
     sign(g, 'MERCADO / FRESH & LOCAL', 0, 3.9, 9.4, 14, '#477550');
+    for (const side of [-1, 1]) {
+      const facade = new THREE.Group(); facade.rotation.y = side * Math.PI / 2; g.add(facade);
+      for (let x = -5; x <= 5; x += 2.5) windowPane(facade, x, 2, 11.6, 1.9, 2.3);
+      sign(facade, 'FRESH MARKET', 0, 3.9, 11.7, 8, '#477550');
+    }
+    for (const x of [-6, 0, 6]) { kit.rounded(g, 3.6, .3, 4, 0xd8e4d8, x, 5.3, -1, .2); kit.rounded(g, 3, .12, 3.4, 0x7ca5a8, x, 5.5, -1, .1, .25); }
+    kit.ball(g, 0xb95241, -2, 6.3, 7.7, .75); kit.ball(g, 0xd5a84e, 0, 6.3, 7.7, .8); kit.ball(g, 0x718e54, 2, 6.3, 7.7, .7);
     for (const x of [-8, -5, 5, 8]) { block(g, 2, .6, 1.2, timber, x, .55, 9.2); for (let i = 0; i < 6; i++) cylinder(g, .15, .18, .3, material(i % 2 ? 0xc48946 : 0x6e8e4c), x - .75 + i * .3, .95, 9.2); }
   });
   headquarters('padaria', (g) => {
-    block(g, 13, 4.1, 10, texture('stucco', '#e6c5a4'), 0, 2.2, 0);
+    kit.rounded(g, 13, 4.1, 10, 0xe6c5a4, 0, 2.2, 0, .5);
     gable(g, 13, 10, 1.5, 4.3, tileRoof);
     for (const x of [-4, 0, 4]) windowPane(g, x, 2.1, 5.1, 3, 2.6);
     for (let i = 0; i < 13; i++) block(g, 1, .15, 2.2, i % 2 ? white : material(0xb96f51), -6 + i, 3.7, 5.7);
     sign(g, 'PADARIA DA ESQUINA', 0, 4.1, 5.3, 8, '#9a6147');
+    kit.breadSign(g, 0, 6.7, 3.5);
+    for (const side of [-1, 1]) {
+      const facade = new THREE.Group(); facade.rotation.y = side * Math.PI / 2; g.add(facade);
+      for (const x of [-2.5, 2.5]) windowPane(facade, x, 2, 6.6, 2.3, 2.5);
+      sign(facade, 'PÃO / CAFÉ', 0, 3.9, 6.7, 5, '#9a6147');
+    }
     block(g, 15, .1, 5, concrete, 0, .12, 8);
     for (const x of [-4, 4]) { cylinder(g, .8, .8, .1, timber, x, 1, 7.7); cylinder(g, .08, .08, .9, steel, x, .5, 7.7); hedge(g, x, 10, 2); }
   });
@@ -409,7 +466,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
     const vehicle = car([0xf2eee4, 0x53636b, 0xa36753][Math.floor(random() * 3)]!); vehicle.position.set(x!, .15, z!); vehicle.rotation.y = Math.PI / 2; staticCity.add(vehicle);
   }
   for (const [i, x] of [-67, -54, -25, -13, 14, 27, 54, 67].entries()) {
-    if (x < -40) { home(staticCity, x, -59, i); home(staticCity, x, 59, i + 2); }
+    if (x < -40) home(staticCity, x, 59, i + 2);
     tree(x + 4, -49, .95); tree(x - 5, 70, 1.2);
   }
   // A permanent skyline makes the city feel inhabited from the first level.
@@ -423,13 +480,8 @@ export function buildSiliconValley(scene: THREE.Scene) {
   for (const [x, z, name, color] of [[-29, 7, 'BOOKS & IDEAS', 0x886450], [6, 7, 'DESIGN STUDIO', 0x4c7777], [-70, 7, 'FLORISTA', 0x717c55], [69, -28, 'CYCLE SHOP', 0x9d7751]] as const) {
     const g = new THREE.Group(); g.position.set(x, .15, z); staticCity.add(g); office(g, 7, 5, 2, material(color)); sign(g, name, 0, 3.4, 3, 5);
   }
-  // Plazas and paths occupy future office/campus parcels while levels are locked.
-  for (const [x, z] of [[-18, 19], [19, 20], [57, -18]] as const) {
-    block(staticCity, 20, .035, 20, concrete, x, .095, z);
-    block(staticCity, 13, .045, 13, grass, x, .12, z);
-    for (const side of [-1, 1]) hedge(staticCity, x + side * 8, z + 7, 2.5);
-    block(staticCity, 2, .06, 13, concrete, x, .16, z + 9);
-  }
+  // Occupied parks become startup plots only when that building is unlocked.
+  for (const [x, z, until] of [[-18, 19, 3], [19, 20, 4], [57, -18, 5], [-60, -60, 6]] as const) parks.push({ group: kit.park(scene, x, z, until), until });
   for (const [x, z, floors] of [[-59, -104, 2], [58, -104, 3], [-58, 104, 2], [58, 104, 2], [18, -104, 3]] as const) {
     // These peripheral office clusters are set behind the residential street.
     const g = new THREE.Group(); g.position.set(x, 0, z); staticCity.add(g); office(g, 18, 12, floors, steel);
@@ -473,6 +525,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
     const mesh = car([0xe9e6df, 0x485a64, 0x9b5e49, 0xa4a999][i % 4]!); scene.add(mesh);
     cars.push({ mesh, axis: i % 2 ? 'x' : 'z', road: [-40, 0, 40][i % 3]!, direction: i % 4 < 2 ? 1 : -1, position: -78 + i * 10, speed: 4 + random() * 2 });
   }
+  const signals = createSignals(staticCity, kit);
 
   // Merge static architectural details by material to keep draw calls bounded.
   function batch(group: THREE.Group) {
@@ -500,10 +553,12 @@ export function buildSiliconValley(scene: THREE.Scene) {
     return originals;
   }
   const originals = new Set<THREE.BufferGeometry>();
-  for (const group of [staticCity, ...buildings.map((b) => b.group)]) for (const geo of batch(group)) originals.add(geo);
+  for (const group of [staticCity, ...buildings.map((b) => b.group), ...parks.map(p => p.group), ...cars.map(c => c.mesh)]) for (const geo of batch(group)) originals.add(geo);
   // Geometry still used by cars or instanced foliage must stay alive.
   const retained = new Set<THREE.BufferGeometry>();
   scene.traverse((obj) => { if (obj instanceof THREE.Mesh) retained.add(obj.geometry); });
   for (const geo of originals) if (!retained.has(geo)) geo.dispose();
-  return { buildings, cars, windows, waves };
+  const walkers = createWalkers(scene);
+  const updateWater = (seconds: number) => { seaNormals.offset.set(seconds * .006, seconds * .003); };
+  return { buildings, cars, windows, waves, parks, signals, walkers, updateWater };
 }

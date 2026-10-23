@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
 import { buildSiliconValley, CITY_ANCHORS, type CityAnchor } from './siliconValley';
+import { advanceTraffic } from './cityTraffic';
 
 export type ValeStage = 1 | 2 | 3 | 4 | 5;
 export type LabelId = CityAnchor['id'];
@@ -37,16 +38,16 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const pmrem = new THREE.PMREMGenerator(renderer);
   const environment = pmrem.fromScene(environmentScene, .04);
   scene.environment = environment.texture;
-  scene.environmentIntensity = .35;
+  scene.environmentIntensity = .55;
   environmentScene.dispose();
   pmrem.dispose();
   let weather: ValeWeather = DEFAULT_WEATHER;
   let precip: { pts: THREE.Points; kind: 'rain' | 'snow'; speed: number } | null = null;
 
-  const hemi = new THREE.HemisphereLight(0xe8f1ff, 0x6d775f, 0.8 * Math.PI);
+  const hemi = new THREE.HemisphereLight(0xe8f1ff, 0x6d775f, 0.48 * Math.PI);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffffff, 0.85 * Math.PI);
-  sun.position.set(30, 50, 22);
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1 * Math.PI);
+  sun.position.set(-45, 65, 30);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.normalBias = 0.04;
@@ -55,7 +56,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   sc.left = sc.bottom = -90;
   sc.right = sc.top = 90;
   sc.near = 5;
-  sc.far = 200;
+  sc.far = 240;
   scene.add(sun);
 
   const paint = () => {
@@ -79,9 +80,9 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     scene.background = c;
     scene.fog = new THREE.Fog(c, fogNear, fogFar);
     hemi.color.set(night ? 0x7788bb : 0xe8f1ff);
-    hemi.intensity = 0.8 * Math.PI * light;
+    hemi.intensity = 0.48 * Math.PI * light;
     sun.color.set(night ? 0x9fb4ff : 0xfff1dc);
-    sun.intensity = 0.85 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.6);
+    sun.intensity = 1.1 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.85);
     for (const m of city.windows) m.emissiveIntensity = night ? 0.7 : 0;
   };
 
@@ -105,10 +106,10 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   // câmera: ângulo fixo estilo mapa, arrastar para mover, roda para zoom
   const th = 0.785;
-  const ph = 0.92;
+  const ph = 1;
   let rad = 138;
   let radT = 138;
-  const home = new THREE.Vector3(12, 0, 6);
+  const home = new THREE.Vector3(12, 3, 6);
   const tgt = home.clone();
   let drag: { x: number; y: number } | null = null;
   let press: { x: number; y: number; moved: boolean } | null = null;
@@ -202,11 +203,16 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   paint();
 
   let last = performance.now();
+  let elapsed = 0;
   let raf = 0;
   const v3 = new THREE.Vector3();
   const frame = (now: number) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    if (!reduce) elapsed += dt;
+    city.signals.update(elapsed);
+    if (!reduce) { advanceTraffic(city.cars, elapsed, dt); city.walkers.update(dt, elapsed, false); city.updateWater(elapsed); }
+    for (const park of city.parks) park.group.visible = stage < park.until;
     rad += (radT - rad) * Math.min(1, dt * 8);
     for (const building of city.buildings) {
       const target = stage >= building.min ? 1 : 0;
@@ -227,7 +233,6 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     if (precip) precip.pts.position.set(tgt.x, 0, tgt.z);
     if (!reduce) for (const [i, wave] of city.waves.entries()) { wave.position.x = Math.sin(now / 2200 + i * .7) * .5; (wave.material as THREE.MeshBasicMaterial).opacity = (.45 - i * .035) * (.7 + .3 * Math.sin(now / 1800 + i)); }
     for (const car of city.cars) {
-      if (!reduce) car.position = ((car.position + 88 + car.direction * dt * car.speed + 176) % 176) - 88;
       const lane = car.road + car.direction * 1.7;
       car.mesh.position.set(car.axis === 'x' ? car.position : lane, .15, car.axis === 'z' ? car.position : lane);
       car.mesh.rotation.y = car.axis === 'x' ? (car.direction > 0 ? 0 : Math.PI) : (car.direction > 0 ? -Math.PI / 2 : Math.PI / 2);
@@ -285,7 +290,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
         for (const mat of Array.isArray(obj.material) ? obj.material : [obj.material]) {
           materials.add(mat);
           const surface = mat as THREE.MeshStandardMaterial;
-          for (const texture of [surface.map, surface.bumpMap, surface.emissiveMap]) if (texture) textures.add(texture);
+          for (const texture of [surface.map, surface.bumpMap, surface.emissiveMap, surface.normalMap]) if (texture) textures.add(texture);
         }
         if (obj instanceof THREE.InstancedMesh) obj.dispose();
       });
