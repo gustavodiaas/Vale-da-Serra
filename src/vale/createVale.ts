@@ -24,9 +24,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   } catch {
     return null;
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  let renderRatio = Math.min(window.devicePixelRatio || 1, 1.25);
+  renderer.setPixelRatio(renderRatio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
@@ -49,7 +52,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const sun = new THREE.DirectionalLight(0xffffff, 1.1 * Math.PI);
   sun.position.set(-45, 65, 30);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.normalBias = 0.04;
   sun.shadow.bias = -0.00015;
   const sc = sun.shadow.camera;
@@ -115,6 +118,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   let press: { x: number; y: number; moved: boolean } | null = null;
   const raycaster = new THREE.Raycaster();
   const onDown = (e: PointerEvent) => {
+    renderer.setPixelRatio(Math.min(1, renderRatio));
     canvas.setPointerCapture(e.pointerId);
     drag = { x: e.clientX, y: e.clientY };
     press = { x: e.clientX, y: e.clientY, moved: false };
@@ -141,6 +145,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     }
     drag = null;
     press = null;
+    renderer.setPixelRatio(renderRatio);
   };
   const clampRad = (v: number) => Math.min(180, Math.max(30, v));
   const onWheel = (e: WheelEvent) => {
@@ -204,19 +209,36 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   let last = performance.now();
   let elapsed = 0;
+  let peopleTime = 0;
+  let slowFrames = 0;
+  let labelX = NaN, labelZ = NaN, labelRad = NaN, labelStage = -1, labelWidth = -1, labelHeight = -1;
   let raf = 0;
   const v3 = new THREE.Vector3();
   const frame = (now: number) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    raf = requestAnimationFrame(frame);
+    if (document.hidden) { last = now; return; }
+    if (now - last < 1000 / 30 - 1) return;
+    const interval = now - last;
+    const dt = Math.min(.1, interval / 1000);
     last = now;
+    slowFrames = interval > 55 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+    if (slowFrames >= 20 && renderRatio > .8) { renderRatio = Math.max(.8, renderRatio - .15); renderer.setPixelRatio(drag ? Math.min(1, renderRatio) : renderRatio); slowFrames = 0; }
     if (!reduce) elapsed += dt;
     city.signals.update(elapsed);
-    if (!reduce) { advanceTraffic(city.cars, elapsed, dt); city.walkers.update(dt, elapsed, false); city.updateWater(elapsed); city.activities.update(elapsed); }
+    if (!reduce) {
+      advanceTraffic(city.cars, elapsed, dt);
+      peopleTime += dt;
+      if (peopleTime >= 1 / 15 && !drag) { city.walkers.update(Math.min(peopleTime, .12), elapsed, false); peopleTime = 0; }
+      if (drag) peopleTime = 0;
+      city.updateWater(elapsed); city.activities.update(elapsed);
+    }
     for (const park of city.parks) park.group.visible = stage < park.until;
     rad += (radT - rad) * Math.min(1, dt * 8);
     for (const building of city.buildings) {
       const target = stage >= building.min ? 1 : 0;
-      building.scale = reduce ? target : building.scale + (target - building.scale) * Math.min(1, dt * 6);
+      const previousScale = building.scale;
+      building.scale = reduce || Math.abs(target - building.scale) < .002 ? target : building.scale + (target - building.scale) * Math.min(1, dt * 6);
+      if (previousScale !== building.scale) renderer.shadowMap.needsUpdate = true;
       building.group.visible = building.scale > .01;
       building.group.scale.y = Math.max(building.scale, .001);
     }
@@ -237,23 +259,27 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       car.mesh.position.set(car.axis === 'x' ? car.position : lane, .15, car.axis === 'z' ? car.position : lane);
       car.mesh.rotation.y = car.axis === 'x' ? (car.direction > 0 ? 0 : Math.PI) : (car.direction > 0 ? -Math.PI / 2 : Math.PI / 2);
     }
+    city.fleet.update();
     cam.position.set(tgt.x + rad * Math.sin(ph) * Math.cos(th), tgt.y + rad * Math.cos(ph), tgt.z + rad * Math.sin(ph) * Math.sin(th));
     cam.lookAt(tgt);
     cam.updateMatrixWorld();
     renderer.render(scene, cam);
+    const moveLabels = labelX !== tgt.x || labelZ !== tgt.z || Math.abs(labelRad - rad) > .001 || !Number.isFinite(labelRad) || labelStage !== stage || labelWidth !== w || labelHeight !== h;
+    if (!moveLabels) return;
+    labelX = tgt.x; labelZ = tgt.z; labelRad = rad; labelStage = stage; labelWidth = w; labelHeight = h;
     for (const l of labels) {
       v3.copy(l.pos).project(cam);
       const show = stage >= l.def.min && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
       l.el.style.visibility = show ? 'visible' : 'hidden';
       if (show) l.el.style.transform = `translate(${((v3.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-v3.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%, -100%)`;
     }
-    raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);
 
   return {
     setStage(n) {
       stage = n;
+      renderer.shadowMap.needsUpdate = true;
     },
     setWeather(wt) {
       weather = wt;

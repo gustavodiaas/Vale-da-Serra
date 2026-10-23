@@ -31,6 +31,7 @@ export function advanceTraffic(cars: CityCar[], seconds: number, dt: number) {
 }
 export function createSignals(parent: THREE.Group, kit: ReturnType<typeof cityKit>) {
   const lamps = { x: [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ color: 0x182523, emissiveIntensity: 0 })), z: [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ color: 0x182523, emissiveIntensity: 0 })) };
+  for (const material of [...lamps.x, ...lamps.z]) material.userData.keepSeparate = true;
   const lens = new THREE.SphereGeometry(.12, 10, 8);
   const pole = new THREE.CylinderGeometry(.06, .095, 4.5, 10);
   for (const x of [-40, 0, 40]) for (const z of [-40, 0, 40]) for (const axis of ['x', 'z'] as const) for (const direction of [-1, 1]) {

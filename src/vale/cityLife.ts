@@ -14,12 +14,13 @@ export function cityKit() {
   };
   const geo = (key: string, create: () => THREE.BufferGeometry) => { let result = geometries.get(key); if (!result) { result = create(); geometries.set(key, result); } return result; };
   const mesh = (parent: THREE.Object3D, geometry: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geometry, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-  const rounded = (p: THREE.Object3D, w: number, h: number, d: number, color: number, x: number, y: number, z: number, radius = .12, roughness = .55) => mesh(p, geo(`r:${w}:${h}:${d}:${radius}`, () => new RoundedBoxGeometry(w, h, d, 2, Math.min(radius, w / 2, h / 2, d / 2))), mat(color, roughness), x, y, z);
-  const ball = (p: THREE.Object3D, color: number, x: number, y: number, z: number, sx: number, sy = sx, sz = sx) => { const m = mesh(p, geo('sphere', () => new THREE.SphereGeometry(1, 14, 10)), mat(color), x, y, z); m.scale.set(sx, sy, sz); return m; };
+  const rounded = (p: THREE.Object3D, w: number, h: number, d: number, color: number, x: number, y: number, z: number, radius = .12, roughness = .55) => mesh(p, geo(`r:${w}:${h}:${d}:${radius}`, () => new RoundedBoxGeometry(w, h, d, 1, Math.min(radius, w / 2, h / 2, d / 2))), mat(color, roughness), x, y, z);
+  const ball = (p: THREE.Object3D, color: number, x: number, y: number, z: number, sx: number, sy = sx, sz = sx) => { const m = mesh(p, geo('sphere', () => new THREE.SphereGeometry(1, 10, 8)), mat(color), x, y, z); m.scale.set(sx, sy, sz); return m; };
   const tube = (p: THREE.Object3D, points: THREE.Vector3[], radius: number, color: number) => mesh(p, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 16, radius, 6, false), mat(color));
   const ring = (p: THREE.Object3D, radius: number, thickness: number, color: number, x: number, y: number, z: number) => mesh(p, geo(`torus:${radius}:${thickness}`, () => new THREE.TorusGeometry(radius, thickness, 7, 20)), mat(color, .4, .3), x, y, z);
   function car(color: number, variant = 0) {
     const g = new THREE.Group();
+    g.userData.model = `${color}:${variant % 2}`;
     const paint = mat(color, .26, .25), dark = mat(0x182d39, .18, .35), trim = mat(0xd5dedc, .3, .65);
     rounded(g, 3.95, .65, 1.76, color, 0, .66, 0, .25, .26);
     rounded(g, 3.6, .18, 1.68, 0x293840, 0, .38, 0, .07);
@@ -108,10 +109,10 @@ export function createWalkers(scene: THREE.Scene) {
   for (const x of [-60, -20, 20, 60]) for (const z of [-20, 20, 60]) routes.push([[-15.8, -15.8], [15.8, -15.8], [15.8, 15.8], [-15.8, 15.8]].map(([dx, dz]) => new THREE.Vector3(x + dx!, .2, z + dz!)));
   routes.push([new THREE.Vector3(95.4, .2, -70), new THREE.Vector3(95.4, .2, 75), new THREE.Vector3(96.3, .2, 75), new THREE.Vector3(96.3, .2, -70)]);
   for (const x of [-180, -140, -100, -60, -20, 20, 60]) for (const z of [-140, -100, 100, 140]) routes.push([[-15.8, -15.8], [15.8, -15.8], [15.8, 15.8], [-15.8, 15.8]].map(([dx, dz]) => new THREE.Vector3(x + dx!, .2, z + dz!)));
-  const walkers: CityWalker[] = Array.from({ length: 120 }, (_, i) => ({ route: routes[i % routes.length]!, segment: i % 4, distance: (i % 5) * 4, speed: .65 + (i % 4) * .13, phase: i * 1.7, routine: 'walk', wait: 0, hasBag: false, slot: i }));
+  const walkers: CityWalker[] = Array.from({ length: 64 }, (_, i) => ({ route: routes[i % routes.length]!, segment: i % 4, distance: (i % 5) * 4, speed: .65 + (i % 4) * .13, phase: i * 1.7, routine: 'walk', wait: 0, hasBag: false, slot: i }));
   const route = (points: [number, number][]) => points.map(([x, z]) => new THREE.Vector3(x, .2, z));
   const add = (routine: Routine, points: [number, number][], slot: number, segment = 0, wait = 0) => walkers.push({ route: route(points), segment, distance: 0, speed: .8 + slot % 3 * .13, phase: slot * 1.4, routine, wait, hasBag: false, slot });
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 10; i++) {
     const market = i % 3 !== 0;
     const x = market ? 18 : 60, z = market ? 65.3 : 64.1;
     add('shopping', [[x - 12, 75.8], [x, 75.8], [x, z + 3], [x, z], [x, z + 3], [x, 75.8], [x + 12, 75.8]], i, i % 7, i % 7 === 3 ? 5 : 0);
@@ -120,7 +121,7 @@ export function createWalkers(scene: THREE.Scene) {
     const x = 52 + Math.floor(i / 2) * 4 + (i % 2 ? 1.2 : -1.2);
     add('coffee', [[56, 35.8], [x, 35.8], [x, 29], [x, 24], [x, 29], [x, 35.8]], i, i % 2 ? 0 : 3, i % 2 ? 0 : 12);
   }
-  for (let i = 0; i < 24; i++) { const z = i % 2 ? 9 : -80; add('shore', [[110.2, z], [110.2, z + 65], [109.8, z + 65], [109.8, z]], i, i % 4); walkers[walkers.length - 1]!.distance = i % 6 * 7; }
+  for (let i = 0; i < 12; i++) { const z = i % 2 ? 9 : -80; add('shore', [[110.2, z], [110.2, z + 65], [109.8, z + 65], [109.8, z]], i, i % 4); walkers[walkers.length - 1]!.distance = i % 6 * 7; }
   BEACH_TOWELS.forEach((t, i) => add('sunbathe', [[t.x, t.z], [t.x, t.z + .01]], i));
   VOLLEY_COURTS.forEach((court, c) => { for (let i = 0; i < 4; i++) add('volley', [[court.x + (i % 2 ? 2 : -2), court.z + (i < 2 ? -4.8 : 4.8)], [court.x, court.z]], c * 4 + i); });
   for (let i = 0; i < 8; i++) add('swim', [[119 + i % 3 * 3, -20 + i * 12], [121 + i % 3 * 3, -15 + i * 12]], i);
@@ -143,7 +144,7 @@ export function createWalkers(scene: THREE.Scene) {
     for (let j = 0; j < 4; j++) limbs.setColorAt(i * 4 + j, j < 2 ? new THREE.Color(0x43545c) : skin);
     for (let j = 0; j < 2; j++) shoes.setColorAt(i * 2 + j, new THREE.Color(i % 2 ? 0xd5d2c7 : 0x303b3e));
   }
-  for (const mesh of meshes) { mesh.castShadow = true; mesh.frustumCulled = false; mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(mesh); }
+  for (const mesh of meshes) { mesh.castShadow = false; mesh.frustumCulled = false; mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(mesh); }
   const root = new THREE.Object3D(), part = new THREE.Object3D();
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3(), direction = new THREE.Vector3();

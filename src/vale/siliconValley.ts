@@ -4,6 +4,7 @@ import { cityKit, createWalkers } from './cityLife';
 import { createSignals } from './cityTraffic';
 import { buildDistrict } from './cityDistrict';
 import { buildActivities } from './cityActivities';
+import { createCarFleet } from './carFleet';
 
 export interface CityBuilding { group: THREE.Group; min: number; scale: number; id: CityAnchor['id'] }
 export interface CityCar { mesh: THREE.Group; axis: 'x' | 'z'; road: number; direction: number; position: number; speed: number }
@@ -466,13 +467,12 @@ export function buildSiliconValley(scene: THREE.Scene) {
     if (x < -40) home(staticCity, x, 59, i + 2);
     tree(x + 4, -49, .95); tree(x - 5, 70, 1.2);
   }
-  // A permanent skyline makes the city feel inhabited from the first level.
-  for (const [x, z, floors, w, d] of [[-20, -61, 8, 17, 16], [15, -60, 12, 14, 17], [58, -61, 15, 15, 16], [27, -55, 6, 8, 10], [70, -53, 7, 8, 11]] as const) {
-    const g = new THREE.Group(); g.position.set(x, .15, z); staticCity.add(g);
-    office(g, w, d, floors, steel);
-    const crown = new THREE.Group(); crown.position.y = floors * 3.1 + .5; g.add(crown); office(crown, w * .7, d * .7, 1, steel);
-    block(g, w + 1.5, .25, d + 2, concrete, 0, .13, 0);
-  }
+  // Southern California: low stucco, open courtyards, Art Deco and a selective skyline.
+  district.landmark(-20, -61, 17, 16, 3, 0, 'courtyard');
+  district.landmark(15, -60, 14, 17, 8, 1, 'artdeco');
+  district.landmark(58, -61, 15, 16, 10, 2, 'glass');
+  district.landmark(27, -55, 8, 10, 2, 3, 'spanish');
+  district.landmark(70, -53, 8, 11, 2, 4, 'midcentury');
   // Street-facing infill occupies the edges of future startup parcels.
   for (const [x, z, name, color] of [[-29, 7, 'BOOKS & IDEAS', 0x886450], [6, 7, 'DESIGN STUDIO', 0x4c7777], [-70, 7, 'FLORISTA', 0x717c55], [69, -28, 'CYCLE SHOP', 0x9d7751]] as const) {
     const g = new THREE.Group(); g.position.set(x, .15, z); staticCity.add(g); office(g, 7, 5, 2, material(color)); sign(g, name, 0, 3.4, 3, 5);
@@ -504,9 +504,11 @@ export function buildSiliconValley(scene: THREE.Scene) {
     cars.push({ mesh, axis: i % 2 ? 'x' : 'z', road: [-40, 0, 40][i % 3]!, direction: i % 4 < 2 ? 1 : -1, position: -78 + i * 10, speed: 4 + random() * 2 });
   }
   const signals = createSignals(staticCity, kit);
+  const districtSolid = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const nearSolid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7 });
 
   // Merge static architectural details by material to keep draw calls bounded.
-  function batch(group: THREE.Group) {
+  function batch(group: THREE.Group, castShadow = true) {
     group.updateMatrixWorld(true);
     const batches = new Map<THREE.Material, THREE.BufferGeometry[]>();
     const originals = new Set<THREE.BufferGeometry>();
@@ -515,7 +517,18 @@ export function buildSiliconValley(scene: THREE.Scene) {
       if (!(obj instanceof THREE.Mesh) || obj instanceof THREE.InstancedMesh || Array.isArray(obj.material)) return;
       const geo = obj.geometry.index ? obj.geometry.toNonIndexed() : obj.geometry.clone();
       geo.applyMatrix4(inverse.clone().multiply(obj.matrixWorld));
-      const list = batches.get(obj.material) ?? []; list.push(geo); batches.set(obj.material, list); originals.add(obj.geometry);
+      let targetMaterial: THREE.Material = obj.material;
+      const surface = obj.material as THREE.MeshStandardMaterial;
+      const solid = !surface.map && (!castShadow || (surface.roughness >= .35 && !surface.metalness && !surface.emissive?.getHex() && !surface.userData.keepSeparate));
+      if (solid) {
+        const color = surface.color;
+        const count = geo.getAttribute('position').count;
+        const colors = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) { colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b; }
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        targetMaterial = castShadow ? nearSolid : districtSolid;
+      }
+      const list = batches.get(targetMaterial) ?? []; list.push(geo); batches.set(targetMaterial, list); originals.add(obj.geometry);
     });
     const keep: THREE.Object3D[] = [];
     group.traverse((obj) => { if (obj instanceof THREE.InstancedMesh) keep.push(obj); });
@@ -524,7 +537,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
     for (const [mat, geometries] of batches) {
       // All builder primitives have position, normal and UV attributes.
       const geometry = mergeGeometries(geometries, false);
-      if (geometry) { const mesh = new THREE.Mesh(geometry, mat); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); }
+      if (geometry) { const mesh = new THREE.Mesh(geometry, mat); mesh.castShadow = castShadow; mesh.receiveShadow = castShadow; geometry.computeBoundingSphere(); group.add(mesh); }
       for (const geo of geometries) geo.dispose();
     }
     // Originals are shared builder primitives; dispose after every batch is complete.
@@ -532,11 +545,13 @@ export function buildSiliconValley(scene: THREE.Scene) {
   }
   const originals = new Set<THREE.BufferGeometry>();
   for (const group of [staticCity, ...buildings.map((b) => b.group), ...parks.map(p => p.group), ...cars.map(c => c.mesh)]) for (const geo of batch(group)) originals.add(geo);
+  for (const group of district.chunks) for (const geo of batch(group, false)) originals.add(geo);
   // Geometry still used by cars or instanced foliage must stay alive.
   const retained = new Set<THREE.BufferGeometry>();
   scene.traverse((obj) => { if (obj instanceof THREE.Mesh) retained.add(obj.geometry); });
   for (const geo of originals) if (!retained.has(geo)) geo.dispose();
+  const fleet = createCarFleet(scene, cars);
   const walkers = createWalkers(scene);
   const updateWater = (seconds: number) => { seaNormals.offset.set(seconds * .006, seconds * .003); };
-  return { buildings, cars, windows, waves, parks, signals, walkers, updateWater, activities, districtBuildings: district.buildingCount };
+  return { buildings, cars, windows, waves, parks, signals, walkers, updateWater, activities, fleet, districtBuildings: district.buildingCount, styles: district.styles };
 }

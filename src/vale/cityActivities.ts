@@ -18,7 +18,7 @@ export function buildActivities(parent: THREE.Group, scene: THREE.Scene, kit: Re
     for (let dx = -4.3; dx < 4.4; dx += .35) kit.rounded(parent, .025, .95, .025, 0xf3e9d6, x + dx, 1.98, z, .008);
     kit.rounded(parent, 8.9, .075, .06, 0xf9f1df, x, 2.5, z, .02);
     const ball = new THREE.Group(); scene.add(ball);
-    const core = new THREE.Mesh(new THREE.SphereGeometry(.23, 14, 10), kit.mat(0xf4d69a)); core.castShadow = true; ball.add(core);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(.23, 10, 8), kit.mat(0xf4d69a)); core.castShadow = false; ball.add(core);
     for (const angle of [0, Math.PI / 2]) { const stripe = new THREE.Mesh(new THREE.TorusGeometry(.225, .025, 5, 20), kit.mat(0x4b839b)); stripe.rotation.y = angle; ball.add(stripe); }
     balls.push(ball);
   }
