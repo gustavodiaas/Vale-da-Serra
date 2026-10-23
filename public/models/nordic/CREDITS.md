@@ -16,7 +16,7 @@ Artist: **Quaternius**. Pack: **Medieval Village Pack**, distributed under **CC0
 Artist: **Kenney**. Pack: **Survival Kit**, distributed under **CC0**.
 
 - https://kenney.nl/assets/survival-kit
-- `rock-a.glb`, `rock-b.glb`, `grass-large.glb`, and `Textures/colormap.png`.
+- `rock-a.glb`, `rock-b.glb`, `grass-large.glb`, `tree.glb`, and `Textures/colormap.png`. Scenery colors are adapted at runtime.
 - Original license included in `KENNEY-LICENSE.txt`.
 
 Terrain, water, paths and pier are generated locally by the application. No third-party asset host is contacted while playing.

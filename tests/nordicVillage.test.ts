@@ -59,7 +59,7 @@ describe('Nordic scene resource and placement budget', () => {
       const box = new THREE.Box3().setFromObject(obj);
       expect(Number.isFinite(box.max.y)).toBe(true);
     });
-    expect(meshes).toBeLessThan(70);
+    expect(meshes).toBeLessThan(80);
     expect(triangles).toBeLessThan(250_000);
     for (const building of valley.buildings) {
       const box = new THREE.Box3().setFromObject(building.group);

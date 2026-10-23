@@ -33,7 +33,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1;
+  renderer.toneMappingExposure = 1.06;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const scene = new THREE.Scene();
@@ -44,18 +44,18 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const pmrem = new THREE.PMREMGenerator(renderer);
   const environment = pmrem.fromScene(environmentScene, .04);
   scene.environment = environment.texture;
-  scene.environmentIntensity = .55;
+  scene.environmentIntensity = .38;
   environmentScene.dispose();
   pmrem.dispose();
   let weather: ValeWeather = DEFAULT_WEATHER;
   let precip: { pts: THREE.Points; kind: 'rain' | 'snow'; speed: number } | null = null;
 
-  const hemi = new THREE.HemisphereLight(0xe8f1ff, 0x6d775f, 0.48 * Math.PI);
+  const hemi = new THREE.HemisphereLight(0xe8f1ff, 0x899773, 0.65 * Math.PI);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 1.1 * Math.PI);
-  sun.position.set(-45, 65, 30);
+  sun.position.set(-35, 80, 65);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.normalBias = 0.04;
   sun.shadow.bias = -0.00015;
   const sc = sun.shadow.camera;
@@ -86,7 +86,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     scene.background = c;
     scene.fog = new THREE.Fog(c, fogNear, fogFar);
     hemi.color.set(night ? 0x7788bb : 0xe8f1ff);
-    hemi.intensity = 0.48 * Math.PI * light;
+    hemi.intensity = 0.65 * Math.PI * light;
     sun.color.set(night ? 0x9fb4ff : 0xfff1dc);
     sun.intensity = 1.1 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.85);
     for (const m of city.windows) m.emissiveIntensity = night ? 1 : .18;
@@ -235,7 +235,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     slowFrames = interval > 55 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
     if (slowFrames >= 20 && renderRatio > .8) { renderRatio = Math.max(.8, renderRatio - .15); renderer.setPixelRatio(drag ? Math.min(1, renderRatio) : renderRatio); slowFrames = 0; }
     if (!reduce) elapsed += dt;
-    if (!reduce && !drag) city.updateWater(elapsed);
+    if (!reduce && !drag) city.update(elapsed);
     rad += (radT - rad) * Math.min(1, dt * 8);
     for (const building of city.buildings) {
       const target = stage >= building.min ? 1 : 0;
@@ -309,12 +309,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       const materials = new Set<THREE.Material>();
       const textures = new Set<THREE.Texture>();
       scene.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh)) return;
+        if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.LineSegments)) return;
         geometries.add(obj.geometry);
         for (const mat of Array.isArray(obj.material) ? obj.material : [obj.material]) {
           materials.add(mat);
           const surface = mat as THREE.MeshStandardMaterial;
-          for (const texture of [surface.map, surface.bumpMap, surface.emissiveMap, surface.normalMap]) if (texture) textures.add(texture);
+          for (const texture of [surface.map, surface.bumpMap, surface.emissiveMap, surface.normalMap, surface.userData.depthTexture as THREE.Texture | undefined]) if (texture) textures.add(texture);
         }
         if (obj instanceof THREE.InstancedMesh) obj.dispose();
       });

@@ -29,6 +29,8 @@ A cena ativa é uma primeira vila inspirada em fiordes da Noruega e nas Ilhas Fa
 
 `nordicVillage.ts` monta os destinos financeiros e compartilha superfícies entre objetos repetidos. `nordicTerrain.ts` cria encostas, margens e o terraço habitado. A cidade anterior permanece no histórico e no código legado, mas não é carregada pela cena ativa.
 
+`fjordWater.ts` aplica profundidade costeira, reflexos, espuma e ondulações no material da água. `villageResidents.ts` anima 18 moradores em percursos ligados aos caminhos, com pausas e sacolas de compras. `fjordBoats.ts` monta um veleiro com velas curvas e um barco de porto, incluindo trajetos, balanço e esteira. Moradores compartilham geometrias e atualizam as poses a 15 Hz; água e barcos respeitam a preferência por movimento reduzido.
+
 Os testes em `tests/nordicVillage.test.ts` decodificam os GLBs sem navegador, verificam arquivos de textura, os 11 destinos, cancelamento, falha de carregamento e o orçamento de geometria. Essas checagens não medem FPS nem substituem a avaliação visual no dispositivo.
 
 ## Regras de estágio

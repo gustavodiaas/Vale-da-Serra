@@ -4,6 +4,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { CityAnchor, CityBuilding } from './siliconValley';
 import { createNordicTerrain, heightAt, villagePosition, VILLAGE_LAYOUT } from './nordicTerrain';
 import { createCottageGardens } from './cottageGardens';
+import { createFjordWater } from './fjordWater';
+import { createFjordBoats } from './fjordBoats';
+import { createVillageResidents, type VillageVisit } from './villageResidents';
 
 type House = 'house-a' | 'house-b' | 'house-c' | 'lodge';
 type Plot = { id: CityAnchor['id']; name: string; x: number; z: number; model: House; width: number; color: string; min: number; turn?: number };
@@ -79,9 +82,10 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
   const buildings: CityBuilding[] = [];
   const windows: THREE.MeshStandardMaterial[] = [];
   let cancelled = false;
-  const waterGeometry = new THREE.PlaneGeometry(440, 440, 88, 88); waterGeometry.rotateX(-Math.PI / 2);
-  const water = new THREE.Mesh(waterGeometry, new THREE.MeshStandardMaterial({ color: '#426e77', roughness: .28, metalness: .22 }));
-  water.position.y = -.25; water.name = 'fjord-water'; root.add(water);
+  const water = createFjordWater(); root.add(water.mesh);
+  const boats = createFjordBoats(root);
+  let residents: ReturnType<typeof createVillageResidents> | undefined;
+  let peopleFrame = -1;
 
   // Narrow paths follow the terrain instead of covering the valley with city blocks.
   const pathMaterial = new THREE.MeshStandardMaterial({ color: '#a8a48c', roughness: 1 });
@@ -107,7 +111,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
   deck.castShadow = deck.receiveShadow = true; posts.castShadow = true; root.add(deck, posts);
 
   const ready = (async () => {
-    const names = ['house-a', 'house-b', 'house-c', 'lodge', 'market', 'bench', 'rock-a', 'rock-b', 'grass-large'] as const;
+    const names = ['house-a', 'house-b', 'house-c', 'lodge', 'market', 'bench', 'rock-a', 'rock-b', 'grass-large', 'tree'] as const;
     const results = await Promise.allSettled(names.map(name => load(name)));
     if (cancelled || results.some(r => r.status === 'rejected')) {
       for (const result of results) if (result.status === 'fulfilled') releaseSource(result.value.scene);
@@ -138,6 +142,8 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     }
     try {
       const gardens: { x: number; front: number; width: number }[] = [];
+      const visits: VillageVisit[] = [];
+      const footprints: { x: number; z: number; width: number; depth: number }[] = [];
       for (const [i, plot] of PLOTS.entries()) {
         const mesh = model(plot.model, plot.width, plot.color);
         const group = new THREE.Group(); group.name = plot.id;
@@ -148,6 +154,8 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         const front = box.max.z + 2;
         path([[plot.x, box.max.z - .5], [plot.x, front], [13.5, front]], 1.4);
         if (plot.min === 1) gardens.push({ x: plot.x, front: box.max.z + .75, width: plot.width });
+        if (plot.min === 1) visits.push({ x: plot.x, front, door: box.max.z - .2, kind: plot.id });
+        if (plot.min === 1) footprints.push({ x: plot.x, z: plot.z, width: plot.width + 2, depth: box.max.z - box.min.z + 2 });
       }
       // A few waterfront homes make the shore inhabited without a huge city.
       for (const [i, x] of [-43, -25, -7].entries()) {
@@ -155,11 +163,39 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         house.position.set(x, heightAt(x, 41), 41); root.add(house);
         const box = new THREE.Box3().setFromObject(house);
         gardens.push({ x, front: box.max.z + .75, width: 8 });
+        footprints.push({ x, z: 41, width: 10, depth: box.max.z - box.min.z + 2 });
       }
       path([[-48, 48], [-24, 48], [-4, 48], [13.5, 48], [37, 47]], 2.1);
       for (const [x, z] of [[43, 1], [43, 8]]) { const stall = model('market', 4); stall.position.set(x!, heightAt(x!, z!), z!); root.add(stall); }
       for (const [x, z] of [[-17, 13], [7, 34], [24, 39], [-47, 8], [43, 19]]) { const bench = model('bench', 2.4); bench.position.set(x!, heightAt(x!, z!), z!); root.add(bench); }
       createCottageGardens(root, gardens, glow);
+      const pixels = new Uint8Array(64 * 64 * 4);
+      for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+        const i = (y * 64 + x) * 4, radius = Math.hypot((x - 31.5) / 32, (y - 31.5) / 32);
+        pixels[i] = pixels[i + 1] = pixels[i + 2] = 255; pixels[i + 3] = Math.round(Math.max(0, 1 - radius) ** 1.5 * 255);
+      }
+      const shade = new THREE.DataTexture(pixels, 64, 64); shade.minFilter = shade.magFilter = THREE.LinearFilter; shade.needsUpdate = true;
+      const shadowGeometry = new THREE.PlaneGeometry(1, 1); shadowGeometry.rotateX(-Math.PI / 2);
+      const contacts = new THREE.InstancedMesh(shadowGeometry, new THREE.MeshBasicMaterial({ map: shade, color: '#29472e', opacity: .32, transparent: true, depthWrite: false }), footprints.length);
+      const contact = new THREE.Object3D();
+      footprints.forEach((footprint, i) => { contact.position.set(footprint.x, heightAt(footprint.x, footprint.z) + .035, footprint.z); contact.scale.set(footprint.width * 1.4, 1, footprint.depth * 1.4); contact.updateMatrix(); contacts.setMatrixAt(i, contact.matrix); });
+      contacts.name = 'cottage-contact-shadows'; root.add(contacts);
+      residents = createVillageResidents(root, visits);
+      const trees = [[-55, -57], [-59, -39], [-54, -18], [-60, 3], [-55, 25], [-49, 37], [-38, -73], [-14, -76], [37, -68], [45, 27]];
+      const treeSource = sources.get('tree')!; treeSource.updateMatrixWorld(true);
+      treeSource.traverse(obj => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        const geometry = obj.geometry.clone().applyMatrix4(obj.matrixWorld); geometry.computeBoundingBox();
+        const box = geometry.boundingBox!, h = box.max.y - box.min.y;
+        const positions = geometry.getAttribute('position'), colors = new Float32Array(positions.count * 3);
+        const green = new THREE.Color('#66875b'), bark = new THREE.Color('#8a7053');
+        for (let i = 0; i < positions.count; i++) { const c = (positions.getY(i) - box.min.y) / h < .34 ? bark : green; colors.set([c.r, c.g, c.b], i * 3); }
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const instances = new THREE.InstancedMesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), trees.length);
+        const transform = new THREE.Object3D();
+        trees.forEach(([x, z], i) => { const scale = (5.2 + i % 3) / h; transform.position.set(x!, heightAt(x!, z!) - box.min.y * scale, z!); transform.rotation.y = i * 2.4; transform.scale.setScalar(scale); transform.updateMatrix(); instances.setMatrixAt(i, transform.matrix); });
+        instances.castShadow = instances.receiveShadow = true; root.add(instances);
+      });
       for (const [asset, count] of [['rock-a', 22], ['rock-b', 18], ['grass-large', 48]] as const) {
         const source = sources.get(asset)!; source.updateMatrixWorld(true);
         source.traverse(obj => {
@@ -169,12 +205,13 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
           const size = geometry.boundingBox!.getSize(new THREE.Vector3());
           const baseScale = (asset === 'grass-large' ? 1.8 : 3.2) / Math.max(size.x, size.z, .01);
           const original = obj.material as THREE.MeshStandardMaterial;
-          const material = original.clone(); if (original.map) material.map = original.map.clone();
+          const material = original.clone(); material.map = null; material.vertexColors = false;
+          material.color.set(asset === 'grass-large' ? '#79925b' : '#969b89'); material.roughness = 1;
           const instances = new THREE.InstancedMesh(geometry, material, count);
           const transform = new THREE.Object3D();
           for (let i = 0; i < count; i++) {
-            const z = asset === 'grass-large' ? -80 + (i * 17.31 % 128) : -85 + i * 6.2;
-            const x = asset === 'grass-large' ? -78 + (i * 19.73 % 130) : VILLAGE_LAYOUT.bankX - 3 + Math.sin(z * .027) * 7;
+            const z = asset === 'grass-large' ? -80 + (i * 17.31 % 128) : -85 + i * 6.2 + Math.sin(i * 2.4) * 3;
+            const x = asset === 'grass-large' ? -78 + (i * 19.73 % 130) : VILLAGE_LAYOUT.bankX - 1 + Math.sin(z * .027) * 7 + Math.sin(z * .059) * 2 + Math.sin(i * 1.7) * 2;
             transform.position.set(x, heightAt(x, z) + .1, z);
             transform.rotation.y = i * 2.399;
             transform.scale.setScalar(baseScale * (.75 + (i % 5) * .15)); transform.updateMatrix(); instances.setMatrixAt(i, transform.matrix);
@@ -184,10 +221,10 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
       }
     } finally { for (const source of sources.values()) releaseSource(source); }
   })();
-  function updateWater(seconds: number) {
-    const positions = waterGeometry.getAttribute('position');
-    for (let i = 0; i < positions.count; i++) positions.setY(i, Math.sin(positions.getX(i) * .13 + seconds * .45) * .08 + Math.cos(positions.getZ(i) * .19 - seconds * .3) * .04);
-    positions.needsUpdate = true;
+  function update(seconds: number) {
+    water.update(seconds); boats.update(seconds);
+    const frame = Math.floor(seconds * 15);
+    if (frame !== peopleFrame) { residents?.update(seconds); peopleFrame = frame; }
   }
-  return { buildings, windows, ready, updateWater, cancel() { cancelled = true; } };
+  return { buildings, windows, ready, update, boats, get residents() { return residents; }, cancel() { cancelled = true; } };
 }
