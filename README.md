@@ -33,6 +33,10 @@ A cena ativa é uma primeira vila inspirada em fiordes da Noruega e nas Ilhas Fa
 
 Os testes em `tests/nordicVillage.test.ts` decodificam os GLBs sem navegador, verificam arquivos de textura, os 11 destinos, cancelamento, falha de carregamento e o orçamento de geometria. Essas checagens não medem FPS nem substituem a avaliação visual no dispositivo.
 
+O acabamento visual inclui HDRI local, correção de cor, SMAA/FXAA conforme o nível, bloom noturno e miniatura leve. O menu **Visual do vale** permite escolher qualidade automática/alta/média/baixa e prévia de dia/noite. A renderização mira 60 fps em desktop e adapta resolução e efeitos; desempenho em GPU integrada ainda precisa de medição no dispositivo.
+
+Os lotes futuros aparecem em obras. Anexos ampliam o QG no mesmo terreno e o maior estágio visual fica preservado entre sessões, independentemente de oscilações do estágio financeiro. Veja [direção visual e orçamento](docs/visual-quality.md) e [créditos completos](CREDITS.md).
+
 ## Regras de estágio
 
 Garagem: fôlego abaixo de 1 mês. Pré-seed: 1 a 2 meses. Seed: 3 meses e imposto separado. Série A: 6 meses e 3 meses seguidos no azul. Unicórnio: 12 meses e pró-labore por 6 meses seguidos.

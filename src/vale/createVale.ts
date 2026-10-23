@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { createValeFinish } from './valeFinish';
+import type { VisualQuality } from './valeFinish';
+import { DesktopQuality, type QualityMode } from './desktopQuality';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
 import type { CityAnchor } from './siliconValley';
 import { buildNordicVale, NORDIC_ANCHORS } from './nordicVillage';
@@ -9,6 +11,7 @@ import { NORDIC_VIEW } from './nordicTerrain';
 
 export type ValeStage = 1 | 2 | 3 | 4 | 5;
 export type LabelId = CityAnchor['id'];
+export type SceneTime = 'real' | 'day' | 'night';
 
 export interface ValeHandle {
   setStage(n: ValeStage): void;
@@ -17,17 +20,20 @@ export interface ValeHandle {
   zoom(factor: number): void;
   reset(): void;
   dispose(): void;
+  setQuality?(mode: QualityMode): void;
+  setTimeOfDay?(mode: SceneTime): void;
 }
 
 /** Vale com terreno contínuo e modelos GLB ligados ao estágio financeiro. */
-export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void, onAssets?: (status: 'ready' | 'error') => void, onProgress?: (percent: number) => void): ValeHandle | null {
+export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void, onAssets?: (status: 'ready' | 'error') => void, onProgress?: (percent: number) => void, onQuality?: (tier: VisualQuality) => void): ValeHandle | null {
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   } catch {
     return null;
   }
-  let renderRatio = Math.min(window.devicePixelRatio || 1, 1.25);
+  const quality = new DesktopQuality();
+  let renderRatio = Math.min(window.devicePixelRatio || 1, 1.5);
   renderer.setPixelRatio(renderRatio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -55,6 +61,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     scene.environment = naturalEnvironment.texture;
   }).catch(() => { /* The local room environment remains available offline. */ }).finally(() => pmrem.dispose());
   let weather: ValeWeather = DEFAULT_WEATHER;
+  let timeOfDay: SceneTime = 'real';
   let precip: { pts: THREE.Points; kind: 'rain' | 'snow'; speed: number } | null = null;
 
   const hemi = new THREE.HemisphereLight(0xe8f1ff, 0x899773, 0.65 * Math.PI);
@@ -73,7 +80,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   scene.add(sun);
 
   const paint = () => {
-    const night = !weather.isDay;
+    const hour = new Date().getHours();
+    const night = timeOfDay === 'night' || (timeOfDay === 'real' && (weather.tempC === null ? hour < 6 || hour >= 18 : !weather.isDay));
     const c = new THREE.Color('#bdccd0');
     let light = 1;
     let fogNear = 250;
@@ -92,7 +100,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     }
     scene.environmentIntensity = night ? .1 : .48 * light;
     finish.setNight(night);
-    const hours = new Date().getHours() + new Date().getMinutes() / 60;
+    const hours = timeOfDay === 'day' ? 14 : new Date().getHours() + new Date().getMinutes() / 60;
     const solarAngle = (hours - 6) / 12 * Math.PI;
     const elevation = Math.max(.12, Math.sin(solarAngle));
     sun.position.set(night ? -35 : Math.cos(solarAngle) * 70, night ? 55 : 32 + elevation * 65, 60);
@@ -134,12 +142,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   let radT: number = NORDIC_VIEW.radius;
   const home = new THREE.Vector3(...NORDIC_VIEW.target);
   const tgt = home.clone();
+  const panTarget = home.clone();
   let drag: { x: number; y: number } | null = null;
   let press: { x: number; y: number; moved: boolean } | null = null;
   const raycaster = new THREE.Raycaster();
   const onDown = (e: PointerEvent) => {
-    renderer.setPixelRatio(Math.min(1, renderRatio));
-    finish.resize(w, h, Math.min(1, renderRatio));
+    if (e.button !== 0) return;
     canvas.setPointerCapture(e.pointerId);
     drag = { x: e.clientX, y: e.clientY };
     press = { x: e.clientX, y: e.clientY, moved: false };
@@ -150,10 +158,11 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
     if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) press.moved = true;
-    tgt.x += -Math.sin(th) * dx * k - Math.cos(th) * dy * k;
-    tgt.z += Math.cos(th) * dx * k - Math.sin(th) * dy * k;
-    tgt.x = Math.min(90, Math.max(-90, tgt.x));
-    tgt.z = Math.min(70, Math.max(-90, tgt.z));
+    if (press?.moved) applyRatio(Math.min(1, renderRatio));
+    panTarget.x += -Math.sin(th) * dx * k - Math.cos(th) * dy * k;
+    panTarget.z += Math.cos(th) * dx * k - Math.sin(th) * dy * k;
+    panTarget.x = Math.min(90, Math.max(-90, panTarget.x));
+    panTarget.z = Math.min(70, Math.max(-90, panTarget.z));
     drag = { x: e.clientX, y: e.clientY };
   };
   const onUp = (e: PointerEvent) => {
@@ -166,8 +175,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     }
     drag = null;
     press = null;
-    renderer.setPixelRatio(renderRatio);
-    finish.resize(w, h, renderRatio);
+    applyRatio(renderRatio);
   };
   const clampRad = (v: number) => Math.min(215, Math.max(35, v));
   const onWheel = (e: WheelEvent) => {
@@ -185,6 +193,15 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   try { const saved = Number(localStorage.getItem(progressKey)); if (Number.isInteger(saved) && saved >= 1 && saved <= 5) stage = Math.max(initial, saved); } catch { /* Scene still works when storage is unavailable. */ }
   let w = 1;
   let h = 1;
+  function applyRatio(ratio: number) {
+    if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
+    finish.resize(w, h, ratio);
+  }
+  const applyQuality = () => {
+    renderRatio = quality.ratio(w, h, window.devicePixelRatio || 1);
+    finish.setQuality(quality.tier); applyRatio(drag && press?.moved ? Math.min(1, renderRatio) : renderRatio);
+    canvas.dataset.quality = quality.tier; onQuality?.(quality.tier);
+  };
   const resize = () => {
     const cw = canvas.clientWidth;
     const ch = canvas.clientHeight;
@@ -192,7 +209,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     w = cw;
     h = ch;
     renderer.setSize(cw, ch, false);
-    finish.resize(cw, ch, renderer.getPixelRatio());
+    applyQuality();
     cam.aspect = cw / ch;
     cam.fov = cw < ch ? 52 : 36;
     if (cw > 900) cam.setViewOffset(cw, ch, -Math.min(160, cw * .1), 0, cw, ch);
@@ -234,11 +251,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   let last = performance.now();
   let elapsed = 0;
-  let slowFrames = 0;
+  let readyAt = Infinity;
   let labelX = NaN, labelZ = NaN, labelRad = NaN, labelStage = -1, labelWidth = -1, labelHeight = -1;
   void city.ready.then(() => {
     if (disposed) return;
     assetsReady = true;
+    readyAt = performance.now(); quality.reset();
     city.setStage(stage);
     for (const label of labels) label.pos.set(...label.def.position);
     labelStage = -1;
@@ -247,21 +265,25 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   }).catch(() => { if (!disposed) onAssets?.('error'); });
   let raf = 0;
   let lightMinute = -1;
+  let nextFrame = 0;
+  renderer.info.autoReset = false;
   const v3 = new THREE.Vector3();
   const frame = (now: number) => {
     raf = requestAnimationFrame(frame);
-    if (document.hidden) { last = now; return; }
+    if (document.hidden) { last = now; nextFrame = now; quality.reset(); return; }
     const minute = Math.floor(Date.now() / 60000);
     if (minute !== lightMinute) { lightMinute = minute; paint(); }
-    if (now - last < 1000 / 30 - 1) return;
+    if (now < nextFrame - .5) return;
+    nextFrame = Math.max(nextFrame + 1000 / 60, now + 1);
     const interval = now - last;
     const dt = Math.min(.1, interval / 1000);
     last = now;
-    slowFrames = interval > 55 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
-    if (slowFrames >= 20 && renderRatio > .8) { renderRatio = Math.max(.8, renderRatio - .15); renderer.setPixelRatio(drag ? Math.min(1, renderRatio) : renderRatio); finish.resize(w, h, renderer.getPixelRatio()); finish.setQuality(renderRatio < 1 ? 'low' : 'medium'); slowFrames = 0; }
+    if (now - readyAt > 3000 && quality.sample(now, interval)) applyQuality();
     if (!reduce) elapsed += dt;
     if (!reduce && !drag) city.update(elapsed);
     rad += (radT - rad) * Math.min(1, dt * 8);
+    tgt.lerp(panTarget, reduce ? 1 : 1 - Math.exp(-dt * 10));
+    if (tgt.distanceToSquared(panTarget) < .000001) tgt.copy(panTarget);
     for (const building of city.buildings) {
       const target = stage >= building.min ? 1 : 0;
       const previousScale = building.scale;
@@ -284,7 +306,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     cam.position.set(tgt.x + rad * Math.sin(ph) * Math.cos(th), tgt.y + rad * Math.cos(ph), tgt.z + rad * Math.sin(ph) * Math.sin(th));
     cam.lookAt(tgt);
     cam.updateMatrixWorld();
-    finish.render();
+    renderer.info.reset(); finish.render();
+    if (now - readyAt > 3000 && quality.fps > 0) {
+      canvas.dataset.fps = quality.fps.toFixed(1);
+      canvas.dataset.drawCalls = String(renderer.info.render.calls);
+      canvas.dataset.triangles = String(renderer.info.render.triangles);
+    }
     const moveLabels = labelX !== tgt.x || labelZ !== tgt.z || Math.abs(labelRad - rad) > .001 || !Number.isFinite(labelRad) || labelStage !== stage || labelWidth !== w || labelHeight !== h;
     if (!moveLabels) return;
     labelX = tgt.x; labelZ = tgt.z; labelRad = rad; labelStage = stage; labelWidth = w; labelHeight = h;
@@ -320,9 +347,11 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       radT = clampRad(radT * f);
     },
     reset() {
-      tgt.copy(home);
+      panTarget.copy(home);
       radT = NORDIC_VIEW.radius;
     },
+    setQuality(mode) { quality.setMode(mode); applyQuality(); },
+    setTimeOfDay(mode) { timeOfDay = mode; paint(); },
     dispose() {
       disposed = true;
       city.cancel();

@@ -32,6 +32,7 @@ export function createValeFinish(renderer: THREE.WebGLRenderer, scene: THREE.Sce
   const smaa = new SMAAPass(), output = new OutputPass(), fxaa = new ShaderPass(FXAAShader);
   for (const pass of [render, bloom, grade, smaa, output, fxaa]) composer.addPass(pass);
   let quality: VisualQuality = 'high', night = false;
+  let lastWidth = 0, lastHeight = 0, lastRatio = 0;
   const configure = () => {
     smaa.enabled = quality === 'high'; fxaa.enabled = quality === 'medium';
     bloom.enabled = night && quality === 'high';
@@ -44,6 +45,8 @@ export function createValeFinish(renderer: THREE.WebGLRenderer, scene: THREE.Sce
     setQuality(value: VisualQuality) { quality = value; configure(); },
     setNight(value: boolean) { night = value; configure(); },
     resize(width: number, height: number, ratio: number) {
+      if (width === lastWidth && height === lastHeight && ratio === lastRatio) return;
+      lastWidth = width; lastHeight = height; lastRatio = ratio;
       composer.setPixelRatio(ratio); composer.setSize(width, height);
       grade.uniforms.texel!.value.set(1 / (width * ratio), 1 / (height * ratio));
       fxaa.uniforms.resolution!.value.set(1 / (width * ratio), 1 / (height * ratio));
