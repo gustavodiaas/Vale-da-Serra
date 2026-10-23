@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityKit, createWalkers } from './cityLife';
 import { createSignals } from './cityTraffic';
+import { buildDistrict } from './cityDistrict';
+import { buildActivities } from './cityActivities';
 
 export interface CityBuilding { group: THREE.Group; min: number; scale: number; id: CityAnchor['id'] }
 export interface CityCar { mesh: THREE.Group; axis: 'x' | 'z'; road: number; direction: number; position: number; speed: number }
@@ -267,7 +269,7 @@ export function buildSiliconValley(scene: THREE.Scene) {
   }
 
   // Four continuous avenues and cross streets form walkable, occupied blocks.
-  block(staticCity, 600, .1, 600, grass, 0, -.08, 0);
+  block(staticCity, 1000, .1, 1000, concrete, -120, -.08, 0);
   const roadPositions = [-80, -40, 0, 40, 80];
   for (const axis of ['x', 'z'] as const) for (const road of roadPositions) {
     const alongX = axis === 'x';
@@ -286,22 +288,14 @@ export function buildSiliconValley(scene: THREE.Scene) {
       block(staticCity, 1.8, .015, .5, white, x + side * 5.2, .17, z + stripe * 1.1);
     }
   }
-  // A continuous perimeter boulevard receives every avenue, with no cut-off ends.
-  for (const side of [-1, 1]) {
-    block(staticCity, 188, .13, 9, concrete, 0, .02, side * 90);
-    block(staticCity, 188, .045, 6.8, asphalt, 0, .115, side * 90);
-    block(staticCity, 9, .13, 188, concrete, side * 90, .02, 0);
-    block(staticCity, 6.8, .045, 188, asphalt, side * 90, .115, 0);
-    for (const end of roadPositions) {
-      block(staticCity, 7, .035, 12, asphalt, end, .15, side * 85);
-      block(staticCity, 12, .035, 7, asphalt, side * 85, .15, end);
-    }
-  }
+  const district = buildDistrict(staticCity, kit);
+  windows.push(...district.windows);
+  const activities = buildActivities(staticCity, scene, kit);
   // Pacific-inspired coast: a shaped sandy shoreline, promenade and open sea.
   function coastalSurface(inner: number, outer: number, mat: THREE.Material, y: number, parent: THREE.Group) {
     const shape = new THREE.Shape();
-    for (let z = -230; z <= 230; z += 5) { const x = inner + Math.sin(z * .025) * 2.3; if (z === -230) shape.moveTo(x, -z); else shape.lineTo(x, -z); }
-    shape.lineTo(outer, -230); shape.lineTo(outer, 230); shape.closePath();
+    for (let z = -500; z <= 500; z += 5) { const x = inner + Math.sin(z * .025) * 2.3; if (z === -500) shape.moveTo(x, -z); else shape.lineTo(x, -z); }
+    shape.lineTo(outer, -500); shape.lineTo(outer, 500); shape.closePath();
     const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat); mesh.rotation.x = -Math.PI / 2; mesh.position.y = y; mesh.receiveShadow = true; parent.add(mesh);
   }
   const sand = texture('concrete', '#dfc58f');
@@ -319,11 +313,12 @@ export function buildSiliconValley(scene: THREE.Scene) {
   const ocean = new THREE.MeshPhysicalMaterial({ color: 0x278ca5, roughness: .25, metalness: .15, clearcoat: .6, clearcoatRoughness: .25, normalMap: seaNormals, normalScale: new THREE.Vector2(.45, .45) });
   coastalSurface(113, 500, ocean, .015, water);
   coastalSurface(110.5, 116, new THREE.MeshStandardMaterial({ color: 0x68b6ba, roughness: .5, transparent: true, opacity: .65, depthWrite: false }), .035, water);
-  block(staticCity, 2.8, .13, 188, concrete, 96, .08, 0);
+  block(staticCity, 2.8, .13, 680, concrete, 96, .08, 0);
   for (let z = -80; z < 90; z += 12) {
     palm(98, z, 7 + random());
     block(staticCity, .15, .5, 2.3, timber, 97.4, .8, z + 4);
     block(staticCity, .65, .15, 2.3, timber, 97.1, .55, z + 4);
+    if (Math.abs(z + 3 + 54) < 11 || Math.abs(z + 3 - 64) < 11) continue;
     const parasol = new THREE.Group(); parasol.position.set(105 + random() * 2, 0, z + 3); staticCity.add(parasol);
     cylinder(parasol, .04, .04, 2.7, timber, 0, 1.35, 0);
     cylinder(parasol, .1, 1.5, .5, z % 24 ? white : material(0xcb7d59), 0, 2.8, 0);
@@ -334,8 +329,10 @@ export function buildSiliconValley(scene: THREE.Scene) {
     const z = -72 + i * 13;
     kit.ball(staticCity, 0xe3c994, 100.5, .18, z, 2.5, .35, 3.4);
     for (let j = 0; j < 5; j++) kit.tube(staticCity, [new THREE.Vector3(100.5 + j * .22, .25, z), new THREE.Vector3(100.7 + j * .22, .9 + j % 2 * .3, z + .15), new THREE.Vector3(100.9 + j * .22, 1.05, z + .4)], .035, 0x9d9b57);
-    const board = kit.ball(staticCity, i % 2 ? 0xd18165 : 0x709fa8, 105, .45, z + 4, .45, .12, 1.8); board.rotation.y = .3;
-    kit.rounded(staticCity, .06, .03, 3, 0xf3ddad, 105, .58, z + 4, .01);
+    if (Math.abs(z + 4 + 54) > 11 && Math.abs(z + 4 - 64) > 11) {
+      const board = kit.ball(staticCity, i % 2 ? 0xd18165 : 0x709fa8, 105, .45, z + 4, .45, .12, 1.8); board.rotation.y = .3;
+      kit.rounded(staticCity, .06, .03, 3, 0xf3ddad, 105, .58, z + 4, .01);
+    }
   }
   for (const z of [-32, 28]) {
     const kiosk = new THREE.Group(); kiosk.position.set(99, .2, z); staticCity.add(kiosk);
@@ -482,10 +479,6 @@ export function buildSiliconValley(scene: THREE.Scene) {
   }
   // Occupied parks become startup plots only when that building is unlocked.
   for (const [x, z, until] of [[-18, 19, 3], [19, 20, 4], [57, -18, 5], [-60, -60, 6]] as const) parks.push({ group: kit.park(scene, x, z, until), until });
-  for (const [x, z, floors] of [[-59, -104, 2], [58, -104, 3], [-58, 104, 2], [58, 104, 2], [18, -104, 3]] as const) {
-    // These peripheral office clusters are set behind the residential street.
-    const g = new THREE.Group(); g.position.set(x, 0, z); staticCity.add(g); office(g, 18, 12, floors, steel);
-  }
   // Linear park and redwoods replace the decorative circular lake and plaza.
   block(staticCity, 16, .035, 7, concrete, -19, .13, -31);
   for (const x of [-23, -16]) {
@@ -496,21 +489,6 @@ export function buildSiliconValley(scene: THREE.Scene) {
   for (const x of [9, 29]) for (const z of [7, 31]) { tree(x, z, 1.25); }
   for (const x of [-71, -48, 47, 70]) for (const z of [-28, 29, 49]) tree(x, z, 1.1 + random() * .3, 'redwood');
   for (const x of [7, 29, 48, 69]) palm(x, -28, 7 + random() * 2);
-  for (let i = 0; i < 70; i++) {
-    const x = (random() - .5) * 240; const z = -105 - random() * 50;
-    tree(x, z, 1 + random(), i % 3 ? 'oak' : 'redwood');
-  }
-  // A continuous, irregular terrain mesh avoids the old visible sphere hills.
-  const hillGeometry = new THREE.PlaneGeometry(520, 240, 100, 50);
-  hillGeometry.rotateX(-Math.PI / 2);
-  const terrain = hillGeometry.getAttribute('position');
-  for (let i = 0; i < terrain.count; i++) {
-    const x = terrain.getX(i), z = terrain.getZ(i);
-    const ridge = Math.max(0, -z / 100);
-    terrain.setY(i, ridge * (12 + Math.sin(x * .025) * 5 + Math.sin(x * .057 + z * .033) * 3));
-  }
-  hillGeometry.computeVertexNormals();
-  const hills = new THREE.Mesh(hillGeometry, material(0x9b9c73)); hills.position.set(0, -.2, -175); hills.receiveShadow = true; staticCity.add(hills);
 
   const canopy = new THREE.InstancedMesh(sphereGeometry, leaf, foliage.length);
   const dummy = new THREE.Object3D();
@@ -560,5 +538,5 @@ export function buildSiliconValley(scene: THREE.Scene) {
   for (const geo of originals) if (!retained.has(geo)) geo.dispose();
   const walkers = createWalkers(scene);
   const updateWater = (seconds: number) => { seaNormals.offset.set(seconds * .006, seconds * .003); };
-  return { buildings, cars, windows, waves, parks, signals, walkers, updateWater };
+  return { buildings, cars, windows, waves, parks, signals, walkers, updateWater, activities, districtBuildings: district.buildingCount };
 }

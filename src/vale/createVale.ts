@@ -211,7 +211,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     last = now;
     if (!reduce) elapsed += dt;
     city.signals.update(elapsed);
-    if (!reduce) { advanceTraffic(city.cars, elapsed, dt); city.walkers.update(dt, elapsed, false); city.updateWater(elapsed); }
+    if (!reduce) { advanceTraffic(city.cars, elapsed, dt); city.walkers.update(dt, elapsed, false); city.updateWater(elapsed); city.activities.update(elapsed); }
     for (const park of city.parks) park.group.visible = stage < park.until;
     rad += (radT - rad) * Math.min(1, dt * 8);
     for (const building of city.buildings) {

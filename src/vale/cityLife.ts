@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { BEACH_TOWELS, VOLLEY_COURTS } from './cityActivities';
 
 /** Sculpted miniature assets: rounded silhouettes, layered materials and real depth. */
 export function cityKit() {
@@ -100,24 +101,45 @@ export function cityKit() {
   return { rounded, ball, tube, ring, mat, car, bench, tree, park, breadSign };
 }
 
-export interface CityWalker { route: THREE.Vector3[]; segment: number; distance: number; speed: number; phase: number }
+type Routine = 'walk' | 'shopping' | 'coffee' | 'shore' | 'sunbathe' | 'volley' | 'swim';
+export interface CityWalker { route: THREE.Vector3[]; segment: number; distance: number; speed: number; phase: number; routine: Routine; wait: number; hasBag: boolean; slot: number }
 export function createWalkers(scene: THREE.Scene) {
   const routes: THREE.Vector3[][] = [];
   for (const x of [-60, -20, 20, 60]) for (const z of [-20, 20, 60]) routes.push([[-15.8, -15.8], [15.8, -15.8], [15.8, 15.8], [-15.8, 15.8]].map(([dx, dz]) => new THREE.Vector3(x + dx!, .2, z + dz!)));
   routes.push([new THREE.Vector3(95.4, .2, -70), new THREE.Vector3(95.4, .2, 75), new THREE.Vector3(96.3, .2, 75), new THREE.Vector3(96.3, .2, -70)]);
-  const count = 56;
-  const walkers: CityWalker[] = Array.from({ length: count }, (_, i) => ({ route: routes[i % routes.length]!, segment: i % 4, distance: (i % 5) * 4, speed: .65 + (i % 4) * .13, phase: i * 1.7 }));
+  for (const x of [-180, -140, -100, -60, -20, 20, 60]) for (const z of [-140, -100, 100, 140]) routes.push([[-15.8, -15.8], [15.8, -15.8], [15.8, 15.8], [-15.8, 15.8]].map(([dx, dz]) => new THREE.Vector3(x + dx!, .2, z + dz!)));
+  const walkers: CityWalker[] = Array.from({ length: 120 }, (_, i) => ({ route: routes[i % routes.length]!, segment: i % 4, distance: (i % 5) * 4, speed: .65 + (i % 4) * .13, phase: i * 1.7, routine: 'walk', wait: 0, hasBag: false, slot: i }));
+  const route = (points: [number, number][]) => points.map(([x, z]) => new THREE.Vector3(x, .2, z));
+  const add = (routine: Routine, points: [number, number][], slot: number, segment = 0, wait = 0) => walkers.push({ route: route(points), segment, distance: 0, speed: .8 + slot % 3 * .13, phase: slot * 1.4, routine, wait, hasBag: false, slot });
+  for (let i = 0; i < 16; i++) {
+    const market = i % 3 !== 0;
+    const x = market ? 18 : 60, z = market ? 65.3 : 64.1;
+    add('shopping', [[x - 12, 75.8], [x, 75.8], [x, z + 3], [x, z], [x, z + 3], [x, 75.8], [x + 12, 75.8]], i, i % 7, i % 7 === 3 ? 5 : 0);
+  }
+  for (let i = 0; i < 6; i++) {
+    const x = 52 + Math.floor(i / 2) * 4 + (i % 2 ? 1.2 : -1.2);
+    add('coffee', [[56, 35.8], [x, 35.8], [x, 29], [x, 24], [x, 29], [x, 35.8]], i, i % 2 ? 0 : 3, i % 2 ? 0 : 12);
+  }
+  for (let i = 0; i < 24; i++) { const z = i % 2 ? 9 : -80; add('shore', [[110.2, z], [110.2, z + 65], [109.8, z + 65], [109.8, z]], i, i % 4); walkers[walkers.length - 1]!.distance = i % 6 * 7; }
+  BEACH_TOWELS.forEach((t, i) => add('sunbathe', [[t.x, t.z], [t.x, t.z + .01]], i));
+  VOLLEY_COURTS.forEach((court, c) => { for (let i = 0; i < 4; i++) add('volley', [[court.x + (i % 2 ? 2 : -2), court.z + (i < 2 ? -4.8 : 4.8)], [court.x, court.z]], c * 4 + i); });
+  for (let i = 0; i < 8; i++) add('swim', [[119 + i % 3 * 3, -20 + i * 12], [121 + i % 3 * 3, -15 + i * 12]], i);
+  const count = walkers.length;
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .7 });
   const torso = new THREE.InstancedMesh(new THREE.CapsuleGeometry(.23, .38, 4, 8), material, count);
   const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(.19, 10, 8), material, count);
   const hair = new THREE.InstancedMesh(new THREE.SphereGeometry(.194, 10, 8, 0, Math.PI * 2, 0, Math.PI * .55), material, count);
   const limbs = new THREE.InstancedMesh(new THREE.CapsuleGeometry(.075, .46, 3, 6), material, count * 4);
   const shoes = new THREE.InstancedMesh(new RoundedBoxGeometry(.16, .12, .28, 1, .04), material, count * 2);
-  const meshes = [torso, heads, hair, limbs, shoes];
+  const bags = new THREE.InstancedMesh(new RoundedBoxGeometry(.3, .38, .2, 1, .03), material, count);
+  const cups = new THREE.InstancedMesh(new THREE.CylinderGeometry(.085, .065, .16, 8), material, count);
+  torso.name = 'city-residents'; bags.name = 'shopping-bags';
+  const meshes = [torso, heads, hair, limbs, shoes, bags, cups];
   const colors = [0xb77a5a, 0x658ba5, 0xc99e58, 0x61816c, 0xd2b7a4, 0x635e7a];
   for (let i = 0; i < count; i++) {
     const skin = new THREE.Color([0xe1b38b, 0xb47d55, 0x855b42][i % 3]!);
     torso.setColorAt(i, new THREE.Color(colors[i % colors.length]!)); heads.setColorAt(i, skin); hair.setColorAt(i, new THREE.Color(i % 3 ? 0x453c32 : 0x997651));
+    bags.setColorAt(i, new THREE.Color(i % 2 ? 0xc4a575 : 0x78976c)); cups.setColorAt(i, new THREE.Color(0xf6ebd7));
     for (let j = 0; j < 4; j++) limbs.setColorAt(i * 4 + j, j < 2 ? new THREE.Color(0x43545c) : skin);
     for (let j = 0; j < 2; j++) shoes.setColorAt(i * 2 + j, new THREE.Color(i % 2 ? 0xd5d2c7 : 0x303b3e));
   }
@@ -127,20 +149,42 @@ export function createWalkers(scene: THREE.Scene) {
   const position = new THREE.Vector3(), direction = new THREE.Vector3();
   function update(dt: number, seconds: number, reduced: boolean) {
     for (const [i, person] of walkers.entries()) {
-      const from = person.route[person.segment]!, to = person.route[(person.segment + 1) % person.route.length]!;
-      const length = from.distanceTo(to);
-      if (!reduced) person.distance += dt * person.speed;
-      if (person.distance >= length) { person.distance -= length; person.segment = (person.segment + 1) % person.route.length; }
+      const fixed = ['sunbathe', 'volley', 'swim'].includes(person.routine);
+      if (!reduced) {
+        if (person.wait > 0) { person.wait = Math.max(0, person.wait - dt); if (person.routine === 'shopping') person.hasBag = true; }
+        else if (!fixed) person.distance += dt * person.speed;
+      }
+      let guard = 0;
+      while (!fixed && person.distance >= person.route[person.segment]!.distanceTo(person.route[(person.segment + 1) % person.route.length]!) && guard++ < 20) {
+        person.distance -= person.route[person.segment]!.distanceTo(person.route[(person.segment + 1) % person.route.length]!);
+        person.segment = (person.segment + 1) % person.route.length;
+        if (person.segment === 3 && ['shopping', 'coffee'].includes(person.routine)) { person.wait = person.routine === 'coffee' ? 12 : 5; person.distance = 0; person.hasBag = person.routine === 'shopping'; break; }
+      }
       const start = person.route[person.segment]!, end = person.route[(person.segment + 1) % person.route.length]!;
-      direction.copy(end).sub(start); position.copy(start).addScaledVector(direction, Math.min(1, person.distance / direction.length()));
-      const stride = reduced ? 0 : Math.sin(seconds * 6 + person.phase) * .42;
-      root.position.copy(position); root.rotation.y = Math.atan2(direction.x, direction.z); root.updateMatrix();
-      const place = (mesh: THREE.InstancedMesh, index: number, x: number, y: number, z: number, angle = 0) => { part.position.set(x, y, z); part.rotation.set(angle, 0, 0); part.updateMatrix(); mesh.setMatrixAt(index, matrix.multiplyMatrices(root.matrix, part.matrix)); };
+      direction.copy(end).sub(start); position.copy(start).addScaledVector(direction, fixed ? 0 : Math.min(1, person.distance / Math.max(.001, direction.length())));
+      const sitting = person.routine === 'coffee' && person.wait > 0;
+      const indoors = person.routine === 'shopping' && person.wait > 0;
+      let stride = reduced || person.wait > 0 ? 0 : Math.sin(seconds * 6 + person.phase) * .42;
+      root.position.copy(position); root.rotation.set(0, Math.atan2(direction.x, direction.z), 0); root.scale.setScalar(indoors ? .001 : 1);
+      let armLift = 0;
+      if (sitting) { root.position.y = -.03; root.rotation.y = person.slot % 2 ? -Math.PI / 2 : Math.PI / 2; }
+      if (person.routine === 'sunbathe') { root.position.y = .27; root.rotation.set(Math.PI / 2, 0, 0); stride = 0; }
+      if (person.routine === 'volley') {
+        const t = seconds + Math.floor(person.slot / 4) * 1.3;
+        const bounce = reduced ? 0 : Math.max(0, Math.sin(t * Math.PI / 1.2 + (person.slot % 4 < 2 ? 0 : Math.PI)));
+        root.position.x += reduced ? 0 : Math.sin(t * 1.5 + person.slot) * .45; root.position.y += bounce * .2;
+        root.rotation.y = person.slot % 4 < 2 ? 0 : Math.PI; armLift = -1.8 * bounce; stride *= .25;
+      }
+      if (person.routine === 'swim') { root.position.y = -.9; root.position.x += reduced ? 0 : Math.sin(seconds * .3 + person.slot) * .6; root.position.z += reduced ? 0 : Math.sin(seconds * .2 + person.slot) * .8; armLift = -1.4; stride = reduced ? 0 : Math.sin(seconds * 2 + person.slot) * .6; }
+      root.updateMatrix();
+      const place = (mesh: THREE.InstancedMesh, index: number, x: number, y: number, z: number, angle = 0, scale = 1) => { part.position.set(x, y, z); part.rotation.set(angle, 0, 0); part.scale.setScalar(scale); part.updateMatrix(); mesh.setMatrixAt(index, matrix.multiplyMatrices(root.matrix, part.matrix)); };
       place(torso, i, 0, 1.02, 0); place(heads, i, 0, 1.65, 0); place(hair, i, 0, 1.67, 0);
-      for (let side = 0; side < 2; side++) { const sign = side ? 1 : -1; place(limbs, i * 4 + side, sign * .13, .49, stride * sign * .22, stride * sign); place(limbs, i * 4 + side + 2, sign * .29, 1, -stride * sign * .18, -stride * sign); place(shoes, i * 2 + side, sign * .13, .13, .06 + stride * sign * .33); }
+      for (let side = 0; side < 2; side++) { const sign = side ? 1 : -1; place(limbs, i * 4 + side, sign * .13, .49, sitting ? .25 : stride * sign * .22, sitting ? -1 : stride * sign); place(limbs, i * 4 + side + 2, sign * .29, armLift ? 1.25 : 1, sitting ? .25 : -stride * sign * .18, sitting ? -.8 : armLift - stride * sign); place(shoes, i * 2 + side, sign * .13, .13, (sitting ? .6 : .06) + stride * sign * .33); }
+      place(bags, i, .42, .6, .04, 0, person.hasBag ? 1 : .001);
+      place(cups, i, .29, 1.1, .45, 0, sitting ? 1 : .001);
     }
     for (const mesh of meshes) mesh.instanceMatrix.needsUpdate = true;
   }
   update(0, 0, true);
-  return { update, count };
+  return { update, count, routines: walkers.reduce((result, w) => { result[w.routine] = (result[w.routine] ?? 0) + 1; return result; }, {} as Record<string, number>) };
 }
