@@ -139,21 +139,23 @@ export default function App() {
       </Suspense>
 
       <header className="topbar glass">
-        <div className="brand">Garagem</div>
+        <div className="brand"><span className="brand-mark"><Icon name="home" /></span><div>Garagem<small>SMALL START. BIG FUTURE.</small></div></div>
         <div className="level" title={`Fôlego ${months(f.runwayNoIncomeMonths)}`}>
           <b>Nível {stageIdx + 1}</b>
           <span className="xp"><i style={{ width: `${Math.round(progress * 100)}%` }} /></span>
           <small>{cur.name}</small>
         </div>
         <div className="spacer" />
+        <div className="location"><span className="live-dot" /> SILICON VALLEY <small>Califórnia, EUA</small></div>
         {weather && (
-          <div className="chip" title="Clima real da sua cidade">
+          <div className="chip weather" title="Clima real da sua localização">
             {WEATHER[weather.kind]}{weather.tempC !== null ? ` · ${Math.round(weather.tempC)}°C` : ''}{weather.isDay ? '' : ' · noite'}
           </div>
         )}
         <div className="chip coins" title="Equity">
           <span className="coin" />
           {coins.toLocaleString('pt-BR')}
+          <small>equity</small>
         </div>
         <button className="icon-btn" aria-label="Conselho" onClick={() => setPanel('conselho')}>
           <Icon name="bell" />
@@ -175,9 +177,10 @@ export default function App() {
       </nav>
 
       <section className="balance glass" aria-label="Saldo">
+        <div className="balance-heading"><span>SEU QG FINANCEIRO</span><span className="demo-tag">Demo</span></div>
         <div className="bal-row">
           <div>
-            <small>Caixa hoje</small>
+            <small>Caixa da startup</small>
             <strong>{hidden ? 'R$ ••••••' : brl(Math.round(cash * 100))}</strong>
           </div>
           <div>
@@ -199,6 +202,16 @@ export default function App() {
           </div>
         )}
       </section>
+
+      <section className="journey glass" aria-label="Evolução da startup">
+        <div className="journey-icon"><Icon name="flag" /></div>
+        <span>UM PASSO DE CADA VEZ</span>
+        <h1>Grandes ideias.<br />Pequenos começos.</h1>
+        <p>Sua próxima conquista começa com as finanças em dia.</p>
+        <button onClick={() => setPanel('marcos')}>Explorar meus marcos <span>↗</span></button>
+      </section>
+
+      <div className="map-caption"><span className="live-dot" /> SEU VALE, SEU FUTURO <small>Arraste para explorar · Role para aproximar</small></div>
 
       {panel && (
         <aside className="drawer glass" aria-label={TITLES[panel]}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StageId } from '../engine/types';
 import { createVale, type LabelId, type ValeHandle, type ValeStage } from './createVale';
 import { fetchWeather, type ValeWeather } from './weather';
@@ -14,6 +14,7 @@ interface Props {
 
 /** Cena 3D em tela cheia, ligada ao estágio calculado pelo motor e ao clima real. */
 export function Vale({ stage, labels, onReady, onWeather }: Props) {
+  const [unavailable, setUnavailable] = useState(false);
   const ref = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
   const handle = useRef<ValeHandle | null>(null);
@@ -25,6 +26,7 @@ export function Vale({ stage, labels, onReady, onWeather }: Props) {
   useEffect(() => {
     if (!ref.current || !overlay.current) return;
     const v = createVale(ref.current, overlay.current, initial.current);
+    setUnavailable(!v);
     handle.current = v;
     if (v && lastWeather.current) v.setWeather(lastWeather.current);
     cb.current.onReady?.(v);
@@ -65,6 +67,7 @@ export function Vale({ stage, labels, onReady, onWeather }: Props) {
     <div className="vale-stage">
       <canvas ref={ref} className="vale-canvas" aria-label="Mapa do Vale em 3D que cresce conforme o estágio do caixa" />
       <div ref={overlay} className="vale-overlay" />
+      {unavailable && <div className="scene-fallback"><h2>Seu Vale está aqui.</h2><p>Ative a aceleração gráfica do navegador para explorar a cidade em 3D. Você pode continuar usando o caixa, os cenários e os marcos pelos menus.</p></div>}
     </div>
   );
 }
