@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
-import { buildSiliconValley, CITY_ANCHORS, type CityAnchor } from './siliconValley';
-import { advanceTraffic } from './cityTraffic';
+import type { CityAnchor } from './siliconValley';
+import { buildNordicVale, NORDIC_ANCHORS } from './nordicVillage';
 
 export type ValeStage = 1 | 2 | 3 | 4 | 5;
 export type LabelId = CityAnchor['id'];
@@ -16,8 +16,8 @@ export interface ValeHandle {
   dispose(): void;
 }
 
-/** Cena 3D procedural, com prédios ligados ao estágio financeiro atual. */
-export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void): ValeHandle | null {
+/** Vale com terreno contínuo e modelos GLB ligados ao estágio financeiro. */
+export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void, onAssets?: (status: 'ready' | 'error') => void): ValeHandle | null {
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -36,7 +36,9 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const scene = new THREE.Scene();
-  const city = buildSiliconValley(scene);
+  const city = buildNordicVale(scene);
+  let disposed = false;
+  let assetsReady = false;
   const environmentScene = new RoomEnvironment();
   const pmrem = new THREE.PMREMGenerator(renderer);
   const environment = pmrem.fromScene(environmentScene, .04);
@@ -64,7 +66,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   const paint = () => {
     const night = !weather.isDay;
-    const c = new THREE.Color('#b7cedb');
+    const c = new THREE.Color('#bdccd0');
     let light = 1;
     let fogNear = 250;
     let fogFar = 550;
@@ -92,12 +94,13 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const cam = new THREE.PerspectiveCamera(36, 1, 1, 700);
 
   // etiquetas HTML ancoradas nos prédios
-  const labels = CITY_ANCHORS.map((def) => {
+  const labels = NORDIC_ANCHORS.map((def) => {
     const el = document.createElement('button');
     el.type = 'button';
     el.setAttribute('aria-label', `Visitar ${def.name}`);
     el.addEventListener('click', () => onSelect?.(def.id));
     el.className = 'vale-label';
+    el.style.visibility = 'hidden';
     el.dataset.id = def.id;
     const name = document.createElement('b');
     name.textContent = def.name;
@@ -110,9 +113,9 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   // câmera: ângulo fixo estilo mapa, arrastar para mover, roda para zoom
   const th = 0.785;
   const ph = 1;
-  let rad = 138;
-  let radT = 138;
-  const home = new THREE.Vector3(12, 3, 6);
+  let rad = 142;
+  let radT = 142;
+  const home = new THREE.Vector3(0, 6, -6);
   const tgt = home.clone();
   let drag: { x: number; y: number } | null = null;
   let press: { x: number; y: number; moved: boolean } | null = null;
@@ -141,7 +144,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       raycaster.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), cam);
       const visible = city.buildings.filter(b => b.group.visible && b.scale > .9);
       const hit = raycaster.intersectObjects(visible.map(b => b.group), true)[0];
-      if (hit) { const building = visible.find(b => b.group.children.includes(hit.object)); if (building) onSelect?.(building.id); }
+      if (hit) { const building = visible.find(b => b.group.getObjectById(hit.object.id)); if (building) onSelect?.(building.id); }
     }
     drag = null;
     press = null;
@@ -209,9 +212,16 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   let last = performance.now();
   let elapsed = 0;
-  let peopleTime = 0;
   let slowFrames = 0;
   let labelX = NaN, labelZ = NaN, labelRad = NaN, labelStage = -1, labelWidth = -1, labelHeight = -1;
+  void city.ready.then(() => {
+    if (disposed) return;
+    assetsReady = true;
+    for (const label of labels) label.pos.set(...label.def.position);
+    labelStage = -1;
+    renderer.shadowMap.needsUpdate = true;
+    paint(); onAssets?.('ready');
+  }).catch(() => { if (!disposed) onAssets?.('error'); });
   let raf = 0;
   const v3 = new THREE.Vector3();
   const frame = (now: number) => {
@@ -224,15 +234,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     slowFrames = interval > 55 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
     if (slowFrames >= 20 && renderRatio > .8) { renderRatio = Math.max(.8, renderRatio - .15); renderer.setPixelRatio(drag ? Math.min(1, renderRatio) : renderRatio); slowFrames = 0; }
     if (!reduce) elapsed += dt;
-    city.signals.update(elapsed);
-    if (!reduce) {
-      advanceTraffic(city.cars, elapsed, dt);
-      peopleTime += dt;
-      if (peopleTime >= 1 / 15 && !drag) { city.walkers.update(Math.min(peopleTime, .12), elapsed, false); peopleTime = 0; }
-      if (drag) peopleTime = 0;
-      city.updateWater(elapsed); city.activities.update(elapsed);
-    }
-    for (const park of city.parks) park.group.visible = stage < park.until;
+    if (!reduce && !drag) city.updateWater(elapsed);
     rad += (radT - rad) * Math.min(1, dt * 8);
     for (const building of city.buildings) {
       const target = stage >= building.min ? 1 : 0;
@@ -253,13 +255,6 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       a.needsUpdate = true;
     }
     if (precip) precip.pts.position.set(tgt.x, 0, tgt.z);
-    if (!reduce) for (const [i, wave] of city.waves.entries()) { wave.position.x = Math.sin(now / 2200 + i * .7) * .5; (wave.material as THREE.MeshBasicMaterial).opacity = (.45 - i * .035) * (.7 + .3 * Math.sin(now / 1800 + i)); }
-    for (const car of city.cars) {
-      const lane = car.road + car.direction * 1.7;
-      car.mesh.position.set(car.axis === 'x' ? car.position : lane, .15, car.axis === 'z' ? car.position : lane);
-      car.mesh.rotation.y = car.axis === 'x' ? (car.direction > 0 ? 0 : Math.PI) : (car.direction > 0 ? -Math.PI / 2 : Math.PI / 2);
-    }
-    city.fleet.update();
     cam.position.set(tgt.x + rad * Math.sin(ph) * Math.cos(th), tgt.y + rad * Math.cos(ph), tgt.z + rad * Math.sin(ph) * Math.sin(th));
     cam.lookAt(tgt);
     cam.updateMatrixWorld();
@@ -269,7 +264,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     labelX = tgt.x; labelZ = tgt.z; labelRad = rad; labelStage = stage; labelWidth = w; labelHeight = h;
     for (const l of labels) {
       v3.copy(l.pos).project(cam);
-      const show = stage >= l.def.min && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
+      const show = assetsReady && stage >= l.def.min && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
       l.el.style.visibility = show ? 'visible' : 'hidden';
       if (show) l.el.style.transform = `translate(${((v3.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-v3.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%, -100%)`;
     }
@@ -295,9 +290,11 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     },
     reset() {
       tgt.copy(home);
-      radT = 138;
+      radT = 142;
     },
     dispose() {
+      disposed = true;
+      city.cancel();
       cancelAnimationFrame(raf);
       clearPrecip();
       ro.disconnect();

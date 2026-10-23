@@ -16,6 +16,7 @@ interface Props {
 /** Cena 3D em tela cheia, ligada ao estágio calculado pelo motor e ao clima real. */
 export function Vale({ stage, labels, onReady, onWeather, onSelect }: Props) {
   const [unavailable, setUnavailable] = useState(false);
+  const [assets, setAssets] = useState<'loading' | 'ready' | 'error'>('loading');
   const ref = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
   const handle = useRef<ValeHandle | null>(null);
@@ -26,7 +27,8 @@ export function Vale({ stage, labels, onReady, onWeather, onSelect }: Props) {
 
   useEffect(() => {
     if (!ref.current || !overlay.current) return;
-    const v = createVale(ref.current, overlay.current, initial.current, id => cb.current.onSelect?.(id));
+    setAssets('loading');
+    const v = createVale(ref.current, overlay.current, initial.current, id => cb.current.onSelect?.(id), setAssets);
     setUnavailable(!v);
     handle.current = v;
     if (v && lastWeather.current) v.setWeather(lastWeather.current);
@@ -68,6 +70,7 @@ export function Vale({ stage, labels, onReady, onWeather, onSelect }: Props) {
     <div className="vale-stage">
       <canvas ref={ref} className="vale-canvas" aria-label="Mapa do Vale em 3D que cresce conforme o estágio do caixa" />
       <div ref={overlay} className="vale-overlay" />
+      {!unavailable && assets !== 'ready' && <div className="vale-loading" role="status">{assets === 'loading' ? 'Preparando seu vale…' : 'Não foi possível carregar a vila. Recarregue a página para tentar novamente.'}</div>}
       {unavailable && <div className="scene-fallback"><h2>Seu Vale está aqui.</h2><p>Ative a aceleração gráfica do navegador para explorar a cidade em 3D. Você pode continuar usando o caixa, os cenários e os marcos pelos menus.</p></div>}
     </div>
   );
