@@ -3,7 +3,7 @@ import { springfieldKit } from './springfieldKit';
 import { drawSpringfieldBuilding } from './springfieldBuildings';
 import { createSpringfieldPeople } from './springfieldPeople';
 import { createSpringfieldTraffic } from './springfieldTraffic';
-import { createFjordWater } from './fjordWater';
+import { cartoonMaterial, cartoonColor, createCartoonWater } from './cartoonLook';
 import { SPRINGFIELD_PLACES, SPRINGFIELD_ROADS, type SpringfieldPlace } from './springfieldLocations';
 
 export function springfieldHeightAt(x: number, z: number) {
@@ -18,14 +18,14 @@ export function buildSpringfield(scene: THREE.Scene, onProgress?: (loaded: numbe
   const kit = springfieldKit(), decor = new THREE.Group(); decor.position.y = .18;
   const terrain = new THREE.PlaneGeometry(800, 800, 128, 128); terrain.rotateX(-Math.PI / 2);
   const positions = terrain.getAttribute('position'), colors = new Float32Array(positions.count * 3);
-  const green = new THREE.Color('#8fb36b'), rock = new THREE.Color('#a8b78e');
+  const green = cartoonColor('#8fb36b'), rock = cartoonColor('#a8b78e');
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i), z = positions.getZ(i), y = springfieldHeightAt(x, z); positions.setY(i, y);
-    const color = green.clone().lerp(rock, THREE.MathUtils.smoothstep(y, 3, 30)); color.multiplyScalar(.98 + Math.sin(x * .07) * Math.cos(z * .05) * .035);
+    const color = green.clone().lerp(rock, THREE.MathUtils.smoothstep(y, 3, 30));
     colors.set([color.r, color.g, color.b], i * 3);
   }
   terrain.setAttribute('color', new THREE.BufferAttribute(colors, 3)); terrain.computeVertexNormals();
-  const ground = new THREE.Mesh(terrain, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .94 })); ground.receiveShadow = true; root.add(ground);
+  const ground = new THREE.Mesh(terrain, cartoonMaterial({ vertexColors: true })); ground.receiveShadow = true; root.add(ground);
   // A continuous orthogonal street network, with complete crossings and sidewalks.
   for (const road of SPRINGFIELD_ROADS) {
     kit.box(decor, 15, .12, 505, '#d9d5bf', road, .08, -35); kit.box(decor, 505, .12, 15, '#d9d5bf', -35, .08, road);
@@ -78,7 +78,7 @@ export function buildSpringfield(scene: THREE.Scene, onProgress?: (loaded: numbe
   const people = createSpringfieldPeople(root), traffic = createSpringfieldTraffic(root);
   const characters = people.actors.filter(actor => actor.hero).map(actor => ({ actor, group: proxy(actor.hero!, 6, 3, 3) }));
   // Coast and harbour water are separate from the lake inside the city.
-  const sea = createFjordWater(springfieldHeightAt, 800); sea.mesh.name = 'Springfield ocean'; root.add(sea.mesh);
+  const sea = createCartoonWater(); sea.mesh.name = 'Springfield ocean'; root.add(sea.mesh);
   const boatKit = springfieldKit(false), boatSource = new THREE.Group();
   boatKit.sphere(boatSource, '#b66e59', 0, .4, 0, 1.5, .7, 4); boatKit.box(boatSource, 2, .3, 5, '#e8d3a8', 0, .8, 0, true);
   boatKit.cylinder(boatSource, .09, .12, 6.5, '#a18c68', 0, 4, 0, 8);

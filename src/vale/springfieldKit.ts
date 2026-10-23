@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { cartoonColor, cartoonMaterial } from './cartoonLook';
 
 /** Shared sculpted pieces, baked by material into spatial chunks at completion. */
 export function springfieldKit(withSigns = true) {
   const cache = new Map<string, THREE.BufferGeometry>();
-  const colors = new Map<string, THREE.MeshStandardMaterial>();
-  const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .82 });
-  const glow = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .34, emissive: '#ffd386', emissiveIntensity: .12 });
-  const material = (color: string) => { if (!colors.has(color)) colors.set(color, new THREE.MeshStandardMaterial({ color, roughness: .82 })); return colors.get(color)!; };
+  const colors = new Map<string, THREE.MeshBasicMaterial>();
+  const surface = cartoonMaterial({ vertexColors: true });
+  const glow = cartoonMaterial({ vertexColors: true, window: true });
+  const material = (color: string) => { if (!colors.has(color)) colors.set(color, new THREE.MeshBasicMaterial({ color: cartoonColor(color) })); return colors.get(color)!; };
   const geo = (key: string, make: () => THREE.BufferGeometry) => { if (!cache.has(key)) cache.set(key, make()); return cache.get(key)!; };
   function mesh(parent: THREE.Object3D, geometry: THREE.BufferGeometry, color: string, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx) {
     const m = new THREE.Mesh(geometry, material(color)); m.position.set(x, y, z); m.scale.set(sx, sy, sz); parent.add(m); return m;
@@ -57,8 +58,9 @@ export function springfieldKit(withSigns = true) {
     if (signs >= 64) throw new Error('Sign atlas capacity exceeded');
     const col = signs % 4, row = Math.floor(signs++ / 4);
     if (context) {
-      context.fillStyle = bg; context.fillRect(col * cellW, row * cellH, cellW, cellH);
+      context.fillStyle = cartoonColor(bg).getStyle(); context.fillRect(col * cellW, row * cellH, cellW, cellH);
       let fontSize = 31; do { context.font = `900 ${fontSize--}px Arial`; } while (context.measureText(text).width > cellW - 14 && fontSize > 12);
+      context.strokeStyle = '#28232f'; context.lineWidth = 5; context.strokeRect(col * cellW + 3, row * cellH + 3, cellW - 6, cellH - 6);
       context.fillStyle = ink; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(text, col * cellW + cellW / 2, row * cellH + cellH / 2);
     }
     const g = new THREE.PlaneGeometry(w, h); const uv = g.getAttribute('uv');
@@ -71,7 +73,7 @@ export function springfieldKit(withSigns = true) {
       root.updateMatrixWorld(true);
       root.traverse(object => {
         if (!(object instanceof THREE.Mesh) || object.userData.pick) return;
-        const original = object.material as THREE.MeshStandardMaterial;
+        const original = object.material as THREE.MeshBasicMaterial;
         const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone(); geometry.applyMatrix4(object.matrixWorld);
         const isSign = object.material === signMaterial;
         let key: string;

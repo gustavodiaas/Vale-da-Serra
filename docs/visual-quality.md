@@ -1,37 +1,36 @@
 # Direção e orçamento visual
 
-## Springfield
+## Direção atual: desenho cartoon
 
-Recriação de fã em 3D: casa dos Simpsons, bairros residenciais, comércio, centro cívico, indústrias, parques e litoral. 106 destinos físicos e 10 personagens selecionáveis. Composição própria, sem reivindicar um mapa canônico.
+O proprietário rejeitou o aspecto de maquete 3D e pediu desenho como os Simpsons. A cidade continua em Three.js, mas a apresentação é ilustrada: câmera ortográfica, cores vivas, duas faixas discretas de sombra, contornos escuros e personagens efetivamente desenhados em 2D.
 
-Fachadas com janelas, beirais, portas, jardins, letreiros, monumentos, torres de refrigeração e mascotes. Letreiros compartilham atlas local 1024 × 2048. Cores por vértice, peças compartilhadas, objetos agrupados por região/material e instâncias para partes dos moradores e carros. A cena ativa não baixa GLBs.
+106 destinos físicos e 10 personagens selecionáveis. As finanças, o catálogo, a busca, a navegação, o clima e os cinco estágios foram preservados.
 
 ## Renderização
 
-- PBR, HDRI CC0 local de 1K com PMREM, sol, hemisfério, ACES e sRGB.
-- Sombras estáticas 2048 px. Moradores e trânsito não lançam sombras dinâmicas. Não há SSAO nem oclusão de contato nesta versão.
-- Alto: SMAA, cor, miniatura suave, bloom noturno. Médio: FXAA e cor. Baixo: ACES/sRGB sem pós-processamento.
-- Sol e janelas respondem ao horário; prévia dia/noite disponível. Céu e precipitação respondem ao clima local, sem astronomia precisa.
-- Água costeira com profundidade, espuma e ondulação. Reflexo do ambiente, sem reflexão da cidade em tempo real. Lago interno estático.
-- Pessoas, veículos e barcos atualizam poses a 20 Hz. Renderização mira 60 fps. Movimento reduzido pausa animações; aba oculta pausa renderização.
-- Na visão geral, a faixa de neblina acompanha a distância da câmera.
+- cartoonLook.ts: pintura MeshBasicMaterial com sombreamento cel próprio. Sem iluminação PBR, reflexos, HDRI, ACES ou sombras projetadas. O normal da superfície escolhe somente entre a cor cheia e uma faixa com fator 0,78.
+- Paleta explícita para pele amarela, roupas, casa dos Simpsons, Flanders, Kwik-E-Mart, vegetação, asfalto e janelas. Demais cores recebem saturação maior.
+- cartoonFinish.ts: contornos a partir das diferenças de cor, com espessura em pixels de CSS. Alto/médio acrescentam FXAA; baixo mantém pintura e contornos. Sem bloom, vinheta, color grading ou desfoque.
+- Câmera ortográfica e zoom por enquadramento, sem redução de escala pela distância. Arraste ajustado ao tamanho da tela e à inclinação da câmera.
+- cartoonPeopleArt.ts: 12 desenhos, quatro poses cada, em um atlas Canvas2D 512 × 3072. 32 moradores usam Sprite com textura compartilhada e materiais por quadro. Animação e seleção continuam disponíveis. A arte é uma interpretação de fã produzida no código.
+- Água azul chapada com traços ondulados e linha costeira animados, sem reflexos ou mapa de profundidade.
+- Dia/noite por paleta compartilhada, janelas amarelas à noite. Clima ainda afeta céu e precipitação. Movimento reduzido pausa a animação; aba oculta pausa renderização.
+- HUD com fundos sólidos, bordas escuras e cores da cidade, sem efeito de vidro.
 
-## Orçamento
+## Orçamento e limites da verificação
 
-Validação CPU atual: **86 malhas de renderização, 412.880 triângulos**, incluindo instâncias de personagens e veículos. Volumes invisíveis de seleção não entram nas chamadas de renderização. Testes limitam a cena a menos de 100 malhas e 500 mil triângulos. Isso não mede FPS ou draw calls na GPU.
+Medição CPU: **51 malhas, 332.950 triângulos de malhas e 32 sprites**. Os sprites acrescentam 64 triângulos, totalizando aproximadamente 333 mil. Volumes invisíveis de seleção não entram na renderização. A versão anterior tinha 86 malhas e 412.880 triângulos.
 
-Meta: até 150 chamadas em quadro estável no nível alto. Recalcular sombras e pós-processamento acrescentam chamadas. O canvas expõe data-fps, data-draw-calls, data-triangles e data-quality após aquecimento. **Chamadas reais e desempenho em GPU integrada não foram medidos nesta entrega.**
+Contornos custam um passe de tela inteira. Não há um passe de sombra nem HDRI para carregar. O alvo continua em 60 fps, sem garantia de desempenho: **FPS e chamadas reais ainda não foram medidos na GPU**.
 
-| Nível | DPR máximo | Pixels internos |
-| --- | ---: | ---: |
-| Alto | 1,5 | 3,6 milhões |
-| Médio | 1,1 | 2,1 milhões |
-| Baixo | 0,85 | 1,4 milhão |
+| Nível | DPR máximo | Pixels internos | Acabamento |
+| --- | ---: | ---: | --- |
+| Alto | 1,5 | 3,6 milhões | Pintura + contornos + FXAA |
+| Médio | 1,1 | 2,1 milhões | Pintura + contornos + FXAA |
+| Baixo | 0,85 | 1,4 milhão | Pintura + contornos |
 
-O detector ignora o carregamento e os três segundos iniciais. Reduz um nível abaixo de 50 fps médios e sobe depois de cinco janelas acima de 57 fps; janelas de aproximadamente 2,2 segundos. Seleção manual preservada. Nenhum destino é retirado para reduzir qualidade.
+O detector de qualidade ignora carregamento e aquecimento, reduz um nível abaixo de 50 fps médios e recupera depois de cinco janelas acima de 57 fps. A escolha manual é preservada. Nenhum destino é retirado para reduzir qualidade.
 
-## Conferência pelo proprietário
+Os 58 testes cobrem finanças, catálogo, seleção, rotas, câmera ortográfica, atlas compartilhado e alterações dos shaders de Three.js. Não compilam shaders em GPU nem verificam o Canvas2D visualmente. O proprietário pediu para avaliar o site e enviar screenshots, sem abrir navegador automaticamente.
 
-Build e testes sem navegador verificam recursos, rotas, seleção, catálogo e ações. Não comprovam qualidade visual, iluminação, shaders ou fluidez. O proprietário pediu para avaliar e enviar screenshots; não abrir navegador automaticamente.
-
-Conferir a casa inicial, busca, visão geral, letreiros, Kwik-E-Mart com vale, salário na usina, banco, destinos cívicos, dia/noite e arraste. Interiores, diálogos e trânsito com regras completas não estão implementados.
+Conferir principalmente leitura dos contornos, cores, desenhos e caminhada dos personagens, seleção ao aproximar, visão geral, modo noturno e desempenho. Não há interiores, diálogos ou simulação viária completa.

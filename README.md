@@ -13,7 +13,7 @@ Recriação de fã de Springfield em Three.js para organizar finanças pessoais.
 
 106 destinos físicos: 47 locais nomeados e 59 casas de bairro. Inclui Evergreen Terrace, Kwik-E-Mart, Krusty Burger, Moe's, Lard Lad, escola, banco, biblioteca, prefeitura, hospital, igreja, usina nuclear, Duff, mansão Burns, estádio, lago, Krustyland, aeroporto e porto. A disposição é uma composição para este aplicativo, não um mapa canônico de todos os episódios.
 
-32 moradores animados, incluindo 10 personagens selecionáveis: Homer, Marge, Bart, Lisa, Maggie, Apu, Krusty, Ned Flanders, Wiggum e Burns. Há 24 carros, ônibus escolar, três barcos, calçadas, faixas, sinaleiras e arborização.
+32 moradores desenhados em 2D, com quatro quadros de caminhada, incluindo 10 personagens selecionáveis: Homer, Marge, Bart, Lisa, Maggie, Apu, Krusty, Ned Flanders, Wiggum e Burns. Há 24 carros, ônibus escolar, três barcos, calçadas, faixas, sinaleiras e arborização.
 
 Arraste para explorar, use a roda para aproximar e clique nos prédios ou personagens. **Explorar Springfield** permite buscar todos os 116 destinos, filtrar por atividade e enquadrar a cidade inteira. Os rótulos flutuantes destacam os locais principais; os demais continuam clicáveis e disponíveis na busca.
 
@@ -37,6 +37,7 @@ Os cinco níveis residenciais continuam em src/homeJourney.ts. A cobertura de de
 
 ## Estrutura e qualidade
 
+- src/vale/cartoonLook.ts, cartoonFinish.ts, cartoonPeopleArt.ts: paleta, câmera, pintura cel, contornos e desenhos dos personagens.
 - src/vale/springfieldLocations.ts: catálogo de locais e personagens.
 - springfieldBuildings.ts, springfieldKit.ts: modelos próprios montados e agrupados por região/material, atlas de letreiros.
 - springfieldPeople.ts, springfieldTraffic.ts: moradores e veículos com recursos compartilhados.
@@ -45,7 +46,7 @@ Os cinco níveis residenciais continuam em src/homeJourney.ts. A cobertura de de
 - createVale.ts, Vale.tsx: câmera, navegação, busca, clima, rótulos, qualidade e renderização.
 - src/engine: motor financeiro existente, preservado nesta alteração.
 
-PBR, HDRI local, ACES/sRGB, sombras, cor, antialiasing e bloom noturno. Qualidade automática reduz resolução e efeitos, preservando a cidade. Meta de 60 fps em desktop, ainda sem benchmark de GPU. O proprietário realiza a avaliação visual e pediu para não abrir navegador. Build e testes de CPU não substituem essa avaliação.
+Visual cartoon com cores chapadas, duas faixas de sombra, contornos escuros e câmera ortográfica. Personagens desenhados em atlas 2D compartilhado. Água com traços animados, sem reflexos realistas. Sem PBR, HDRI, bloom ou desfoque de miniatura na cena ativa. Qualidade automática reduz resolução e antialiasing, preservando os contornos e a cidade. Meta de 60 fps em desktop, ainda sem benchmark de GPU. O proprietário realiza a avaliação visual e pediu para não abrir navegador. Build e testes de CPU não substituem essa avaliação.
 
 Veja [orçamento visual](docs/visual-quality.md), [créditos](CREDITS.md) e [passagem de bastão](HANDOFF.md). Os módulos e modelos antigos da vila nórdica permanecem como legado, fora da cena ativa.
 

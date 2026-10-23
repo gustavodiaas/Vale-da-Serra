@@ -2,7 +2,7 @@
 
 A cena ativa é uma recriação de fã de Springfield para uso pessoal, não oficial. Os nomes, personagens e locais de The Simpsons pertencem aos seus respectivos titulares. As interpretações 3D são construídas no código deste projeto; não foram extraídos arquivos de jogos, comprados pacotes ou redistribuídos modelos oficiais. A temática de The Simpsons não é apresentada como CC0.
 
-Arquitetura, veículos, personagens, terreno e letreiros da cena ativa são montados pelos módulos `springfield*.ts`. O único asset externo carregado por essa cena é o ambiente `public/environment/kiara_1_dawn_1k.hdr`, de Greg Zaal / Poly Haven: [fonte](https://polyhaven.com/a/kiara_1_dawn), [licença CC0](https://polyhaven.com/license). O ambiente foi mantido da versão anterior.
+Arquitetura, veículos, terreno e letreiros são montados pelos módulos `springfield*.ts`. Os personagens são desenhos originais de fã feitos com caminhos vetoriais em `cartoonPeopleArt.ts` e rasterizados em um atlas local de animação no navegador. A paleta e a pintura são definidas em `cartoonLook.ts` e `cartoonFinish.ts`. A cena ativa não baixa modelos, sprites oficiais ou HDRI. O ambiente e os modelos das versões anteriores permanecem no acervo abaixo.
 
 ## Acervo anterior, fora da cena ativa
 

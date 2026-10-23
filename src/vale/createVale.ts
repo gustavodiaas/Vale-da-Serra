@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
-import { createValeFinish } from './valeFinish';
+import { createCartoonFinish } from './cartoonFinish';
+import { cartoonNight, createCartoonCamera, frameCartoonCamera } from './cartoonLook';
 import type { VisualQuality } from './valeFinish';
 import { DesktopQuality, type QualityMode } from './desktopQuality';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
@@ -37,12 +36,12 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const quality = new DesktopQuality();
   let renderRatio = Math.min(window.devicePixelRatio || 1, 1.5);
   renderer.setPixelRatio(renderRatio);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.NoToneMapping;
   renderer.toneMappingExposure = 1.06;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -50,78 +49,41 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   let disposed = false;
   const city = buildSpringfield(scene, (loaded, total) => { if (!disposed) onProgress?.(Math.round(loaded / total * 100)); });
   let assetsReady = false;
-  const environmentScene = new RoomEnvironment();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const environment = pmrem.fromScene(environmentScene, .04);
-  scene.environment = environment.texture;
-  scene.environmentIntensity = .38;
-  environmentScene.dispose();
-  let naturalEnvironment: THREE.WebGLRenderTarget | null = null;
-  void new HDRLoader().loadAsync(`${import.meta.env.BASE_URL}environment/kiara_1_dawn_1k.hdr`).then(texture => {
-    if (disposed) { texture.dispose(); return; }
-    naturalEnvironment = pmrem.fromEquirectangular(texture); texture.dispose();
-    scene.environment = naturalEnvironment.texture;
-  }).catch(() => { /* The local room environment remains available offline. */ }).finally(() => pmrem.dispose());
   let weather: ValeWeather = DEFAULT_WEATHER;
   let timeOfDay: SceneTime = 'real';
   let precip: { pts: THREE.Points; kind: 'rain' | 'snow'; speed: number } | null = null;
 
-  const hemi = new THREE.HemisphereLight(0xe8f1ff, 0x899773, 0.65 * Math.PI);
-  scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1 * Math.PI);
-  sun.position.set(-35, 80, 65);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.normalBias = 0.04;
-  sun.shadow.bias = -0.00015;
-  const sc = sun.shadow.camera;
-  sc.left = sc.bottom = -270;
-  sc.right = sc.top = 270;
-  sc.near = 5;
-  sc.far = 800;
-  scene.add(sun);
   let weatherFogNear = 500, weatherFogFar = 1100;
 
   const paint = () => {
     const hour = new Date().getHours();
     const night = timeOfDay === 'night' || (timeOfDay === 'real' && (weather.tempC === null ? hour < 6 || hour >= 18 : !weather.isDay));
-    const c = new THREE.Color('#bdccd0');
-    let light = 1;
+    const c = new THREE.Color('#79cfff');
     let fogNear = 500;
     let fogFar = 1100;
     switch (weather.kind) {
-      case 'cloudy': c.lerp(new THREE.Color('#9aa7b3'), 0.45); light = 0.8; break;
-      case 'rain': c.lerp(new THREE.Color('#9aa7b3'), 0.65); light = 0.7; fogNear = 160; fogFar = 360; break;
-      case 'storm': c.lerp(new THREE.Color('#5d6875'), 0.8); light = 0.55; fogNear = 120; fogFar = 300; break;
-      case 'snow': c.lerp(new THREE.Color('#e8eef4'), 0.65); light = 0.85; fogNear = 150; fogFar = 340; break;
-      case 'fog': c.lerp(new THREE.Color('#c4ccd3'), 0.8); light = 0.75; fogNear = 90; fogFar = 280; break;
+      case 'cloudy': c.lerp(new THREE.Color('#9aa7b3'), 0.45); break;
+      case 'rain': c.lerp(new THREE.Color('#9aa7b3'), 0.65); fogNear = 160; fogFar = 360; break;
+      case 'storm': c.lerp(new THREE.Color('#5d6875'), 0.8); fogNear = 120; fogFar = 300; break;
+      case 'snow': c.lerp(new THREE.Color('#e8eef4'), 0.65); fogNear = 150; fogFar = 340; break;
+      case 'fog': c.lerp(new THREE.Color('#c4ccd3'), 0.8); fogNear = 90; fogFar = 280; break;
       default: break;
     }
     if (night) {
       c.lerp(new THREE.Color('#0b1626'), 0.9);
-      light *= 0.5;
     }
-    scene.environmentIntensity = night ? .1 : .48 * light;
+    cartoonNight.value = night ? 1 : 0;
     finish.setNight(night);
-    const hours = timeOfDay === 'day' ? 14 : new Date().getHours() + new Date().getMinutes() / 60;
-    const solarAngle = (hours - 6) / 12 * Math.PI;
-    const elevation = Math.max(.12, Math.sin(solarAngle));
     fogNear *= 1.5; fogFar *= 1.5;
     weatherFogNear = fogNear; weatherFogFar = fogFar;
-    sun.position.set(night ? -120 : Math.cos(solarAngle) * 180, night ? 190 : 120 + elevation * 150, 160);
     renderer.shadowMap.needsUpdate = true;
     scene.background = c;
     scene.fog = new THREE.Fog(c, fogNear, fogFar);
-    hemi.color.set(night ? 0x7788bb : 0xe8f1ff);
-    hemi.intensity = 0.65 * Math.PI * light * (night ? .65 : 1);
-    sun.color.set(night ? 0x9fb4ff : 0xfff1dc);
-    if (!night) sun.color.lerp(new THREE.Color('#ffc88d'), (1 - elevation) * .32);
-    sun.intensity = 1.1 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.85) * (night ? .35 : 1);
-    for (const m of city.windows) m.emissiveIntensity = night ? 2.2 : .18;
+
   };
 
-  const cam = new THREE.PerspectiveCamera(36, 1, 1, 2200);
-  const finish = createValeFinish(renderer, scene, cam);
+  const cam = createCartoonCamera();
+  const finish = createCartoonFinish(renderer, scene, cam);
 
   // etiquetas HTML ancoradas nos prédios
   const labels = city.anchors.map((def) => {
@@ -159,13 +121,14 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   };
   const onMove = (e: PointerEvent) => {
     if (!drag) return;
-    const k = rad * 0.0016;
+    const k = rad * (w < h ? .82 : .65) / Math.max(1, h);
+    const vertical = k / Math.max(.2, Math.cos(ph));
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
     if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) press.moved = true;
     if (press?.moved) applyRatio(Math.min(1, renderRatio));
-    panTarget.x += -Math.sin(th) * dx * k - Math.cos(th) * dy * k;
-    panTarget.z += Math.cos(th) * dx * k - Math.sin(th) * dy * k;
+    panTarget.x += -Math.sin(th) * dx * k - Math.cos(th) * dy * vertical;
+    panTarget.z += Math.cos(th) * dx * k - Math.sin(th) * dy * vertical;
     panTarget.x = Math.min(260, Math.max(-310, panTarget.x));
     panTarget.z = Math.min(260, Math.max(-310, panTarget.z));
     drag = { x: e.clientX, y: e.clientY };
@@ -215,11 +178,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     h = ch;
     renderer.setSize(cw, ch, false);
     applyQuality();
-    cam.aspect = cw / ch;
-    cam.fov = cw < ch ? 52 : 36;
-    if (cw > 900) cam.setViewOffset(cw, ch, -Math.min(160, cw * .1), 0, cw, ch);
-    else cam.clearViewOffset();
-    cam.updateProjectionMatrix();
+    frameCartoonCamera(cam, rad, cw, ch);
   };
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
@@ -310,6 +269,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     if (precip) precip.pts.position.set(tgt.x, 0, tgt.z);
     cam.position.set(tgt.x + rad * Math.sin(ph) * Math.cos(th), tgt.y + rad * Math.cos(ph), tgt.z + rad * Math.sin(ph) * Math.sin(th));
     cam.lookAt(tgt);
+    frameCartoonCamera(cam, rad, w, h);
     if (scene.fog instanceof THREE.Fog) { const overviewDistance = Math.max(0, rad - 300); scene.fog.near = weatherFogNear + overviewDistance; scene.fog.far = weatherFogFar + overviewDistance; }
     cam.updateMatrixWorld();
     renderer.info.reset(); finish.render();
@@ -364,6 +324,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     dispose() {
       disposed = true;
       city.cancel();
+      city.people.dispose();
       cancelAnimationFrame(raf);
       clearPrecip();
       ro.disconnect();
@@ -389,8 +350,6 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       for (const geometry of geometries) geometry.dispose();
       for (const texture of textures) texture.dispose();
       for (const material of materials) material.dispose();
-      environment.dispose();
-      naturalEnvironment?.dispose();
       finish.dispose();
       renderer.dispose();
     },
