@@ -202,4 +202,56 @@ button,input{ -webkit-tap-highlight-color:transparent }
  .zoom{right:12px;bottom:98px}.zoom button{height:34px;width:32px}.map-caption{display:none}.drawer{left:12px;right:12px;top:auto;bottom:178px;width:auto;max-height:calc(100% - 270px)}.scene-fallback{inset:40% 16px auto 16px}
 }
 @media(max-width:420px){.brand small{display:none}.brand-mark{display:none}.level{border:0;padding-left:0}.xp{display:none}.topbar{gap:8px}.sidebar button{padding:10px}.dock button{padding:13px 10px}.grid2{grid-template-columns:1fr}}
+/* Places are the navigation: bank, food wallet and everyday purchases. */
+.vale-label{pointer-events:auto;cursor:pointer;font-family:inherit;transition:box-shadow .15s,background .15s}
+.vale-label:hover{box-shadow:0 5px 18px #183f3b35;background:#fffdf6}
+.vale-label[data-id=banco]{border-top:3px solid #558e82}
+.vale-label[data-id=mercado]{border-top:3px solid #7b9d58}
+.vale-label[data-id=padaria]{border-top:3px solid #c28562}
+.night .vale-label:hover{background:#315347}
+.drawer{width:440px;max-height:calc(100% - 220px)}
+.drawer-body{gap:18px}
+.drawer-body p{font-size:12px;line-height:1.8;margin:0}
+.drawer-body h3{margin:6px 0 0;font-size:13px;font-weight:600;letter-spacing:-.2px}
+.drawer-body .tile strong{font-size:21px;overflow-wrap:anywhere}
+.drawer-body .muted{font-size:11px;line-height:1.8}
+.drawer-body input:not([type=checkbox]),select{width:100%;margin-top:6px;padding:12px;font:inherit;font-size:13px;color:var(--ink);background:var(--tile);border:1px solid var(--g-line);border-radius:10px;min-width:0}
+.drawer-body label{font-size:11px}
+.drawer-body input[type=checkbox]{accent-color:#376f58}
+.drawer-body fieldset{margin:0;padding:16px;border:1px solid var(--g-line);border-radius:14px;display:grid;gap:14px}
+.drawer-body legend{font-size:11px;font-weight:600;padding:0 6px}
+.action{padding:12px 16px;border-radius:11px;font-size:12px;font-weight:600;text-align:center;line-height:1.5}
+.primary:hover{filter:brightness(1.08)}
+.ghost:hover{background:var(--g-line)}
+.button-row{display:flex;gap:8px;flex-wrap:wrap}.button-row>*{flex:1}
+.text-link{font-size:11px;font-weight:600;text-align:left;color:var(--ok);padding:5px 0}
+.text-link:hover{text-decoration:underline}
+.goal-track{height:6px;border-radius:30px;overflow:hidden;background:var(--g-line)}
+.goal-track i{height:100%;display:block;background:#72a186;border-radius:30px;transition:width .4s}
+.journey .goal-track{margin:16px 0 10px}
+.place-banner{padding:23px;border-radius:16px;color:#fbf4e6;position:relative;overflow:hidden;isolation:isolate;background:#315e55}
+.place-banner:after{content:"";position:absolute;right:-30px;bottom:-50px;width:150px;height:150px;border:22px solid #ffffff0a;border-radius:50%;z-index:-1}
+.place-banner small{font-size:9px;letter-spacing:2px;opacity:.75}
+.place-banner h3{font-size:23px;font-weight:500;letter-spacing:-.8px;line-height:1.25;margin:14px 0!important;max-width:240px}
+.place-banner p{opacity:.8;font-size:11px;max-width:290px}
+.market-banner{background:#526c43}.bakery-banner{background:#9a6852}
+.notice{padding:14px 16px;border-radius:11px;background:var(--tile);border-left:3px solid #739381;font-size:12px!important}
+.sev-critical{border-left-color:var(--bad)!important}.sev-warning{border-left-color:var(--warn)!important}
+.ledger{display:grid;gap:0;border-top:1px solid var(--g-line)}
+.ledger-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid var(--g-line);font-size:11px}
+.ledger-row span{min-width:0}.ledger-row b{display:block;font-weight:500;overflow-wrap:anywhere}
+.ledger-row small{display:block;font-size:9px;color:var(--mute);margin-top:4px}
+.ledger-row strong{font-size:12px;white-space:nowrap;font-weight:600}
+.bill-list{display:grid;gap:8px}.bill{display:flex;align-items:center;gap:10px;padding:13px;background:var(--tile);border-radius:11px}
+.bill>div{flex:1;min-width:0}.bill b{display:block;font-size:12px;font-weight:600;overflow-wrap:anywhere}.bill small{display:block;color:var(--mute);font-size:10px;margin-top:4px}
+.paid-tag{color:var(--ok);font-size:10px;padding:5px 8px;background:#7ca27d14;border-radius:7px;cursor:default}
+.remove-bill{display:grid;place-items:center;width:24px;height:24px;color:var(--mute)}.remove-bill svg{width:13px;height:13px}
+.modal{width:min(470px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;gap:17px}
+.modal label{font-size:11px}.modal input:not([type=checkbox]),.modal select{font-size:14px;padding:12px;width:100%;min-width:0;letter-spacing:0}
+.modal p{font-size:11px;line-height:1.8;margin:0;color:var(--mute)}
+.modal .form-error{padding:10px;background:#c86b5412;color:var(--bad);border-radius:8px}
+.storage-banner{position:absolute;z-index:12;left:16px;right:16px;bottom:100px;padding:14px;background:#a64f3b;color:#fff;font-size:12px;border-radius:12px;display:flex;gap:14px;align-items:center;justify-content:center}
+.storage-banner button{background:#ffffff25;padding:8px;border-radius:7px;font-size:11px}
+@media(max-width:900px){.drawer{width:auto;max-height:calc(100dvh - 200px);bottom:178px}.profile{display:flex;padding:8px}.profile span{display:none}.drawer-body{padding:16px}.sidebar button{padding:10px}.topbar .brand small{display:none}.topbar .brand-mark{display:none}.level{max-width:120px}.coins small{display:none}.location{display:none}}
+@media(max-width:420px){.sidebar button{padding:9px 8px}.sidebar{gap:0}.drawer-body .grid2{grid-template-columns:1fr 1fr}.drawer-body .tile{padding:12px}.drawer-body .tile strong{font-size:17px}.modal .grid2{grid-template-columns:1fr}.level small{display:none}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

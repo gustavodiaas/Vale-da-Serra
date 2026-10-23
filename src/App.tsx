@@ -1,14 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { computeForecast } from './engine/engine';
-import type { Light, ScenarioId, StageId, Tx, TxKind } from './engine/types';
+import { computeForecast, stageFor } from './engine/engine';
+import type { Light, ScenarioId, StageId, Tx } from './engine/types';
 import { demoTxs } from './demo';
-import { supabase } from './lib/supabase';
+import { addMovement, createPersonalState, localDate, moneyInput, parsePersonalState, personalSummary, removeMovement, type Movement, type MovementKind, type PersonalState, type Wallet } from './engine/personal';
 import type { LabelId, ValeHandle } from './vale/createVale';
 import type { ValeWeather, WeatherKind } from './vale/weather';
 
 const Vale = lazy(() => import('./vale/Vale').then((m) => ({ default: m.Vale })));
 
-const brl = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const brl = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const months = (n: number | null) => (n === null ? 'sem custos' : n >= 12 ? '12 meses ou mais' : `${n.toFixed(1).replace('.', ',')} meses`);
 
 const STAGES: { id: StageId; name: string; rule: string; at: number }[] = [
@@ -51,264 +51,146 @@ function Icon({ name }: { name: keyof typeof ICONS }) {
   );
 }
 
-type Panel = 'caixa' | 'cenarios' | 'conselho' | 'marcos' | 'ajustes';
+type Panel = 'caixa' | 'cenarios' | 'conselho' | 'marcos' | 'ajustes' | 'perfil' | 'fixas' | 'banco' | 'mercado' | 'padaria';
 const NAV: { id: Panel; label: string; icon: keyof typeof ICONS }[] = [
-  { id: 'caixa', label: 'Caixa', icon: 'wallet' },
-  { id: 'cenarios', label: 'Cenários', icon: 'chart' },
-  { id: 'conselho', label: 'Conselho', icon: 'bell' },
-  { id: 'marcos', label: 'Marcos', icon: 'flag' },
-  { id: 'ajustes', label: 'Ajustes', icon: 'sliders' },
+  { id: 'caixa', label: 'Carteira', icon: 'wallet' }, { id: 'fixas', label: 'Fixas', icon: 'home' },
+  { id: 'banco', label: 'Banco', icon: 'flag' }, { id: 'mercado', label: 'Mercado', icon: 'plus' },
+  { id: 'conselho', label: 'Conselho', icon: 'bell' }, { id: 'ajustes', label: 'Ajustes', icon: 'sliders' },
 ];
-const TITLES: Record<Panel, string> = { caixa: 'Caixa e fôlego', cenarios: 'Previsão do próximo mês', conselho: 'Conselho', marcos: 'Marcos', ajustes: 'Ajustes de teste' };
-const LAUNCH: Record<TxKind, string> = { out: 'Despesa', in: 'Receita', transfer: 'Transferência' };
+const TITLES: Record<Panel, string> = { caixa: 'Sua carteira', cenarios: 'Cenários e planejamento', conselho: 'Conselho do Vale', marcos: 'Marcos da startup', ajustes: 'Ajustes', perfil: 'Seu perfil financeiro', fixas: 'Contas fixas', banco: 'Banco / sua reserva', mercado: 'Mercado / alimentação', padaria: 'Padaria / gastos diários' };
+const KIND_LABEL = { income: 'Entrada', fixed: 'Saída fixa', daily: 'Gasto diário', save: 'Guardar', withdraw: 'Resgatar' };
+const STORE = 'garagem:personal:v1';
+const valueOf = (form: FormData, name: string) => String(form.get(name) ?? '');
+const inputCents = (form: FormData, name: string) => {
+  const result = moneyInput(valueOf(form, name));
+  if (result === null) throw new Error('Preencha os valores em reais, como 1.250,50.');
+  return result;
+};
+function readSaved() {
+  try { return { state: parsePersonalState(localStorage.getItem(STORE), localDate()), error: '' }; }
+  catch { return { state: createPersonalState(localDate()), error: 'Não foi possível ler seus dados salvos. Eles não serão sobrescritos automaticamente.' }; }
+}
 
 export default function App() {
-  const asOf = new Date().toISOString().slice(0, 10);
-  const baseTxs = useMemo(() => demoTxs(asOf), [asOf]);
-  const [extra, setExtra] = useState<Tx[]>([]);
-  const [cash, setCash] = useState(6000);
-  const [tax, setTax] = useState(6);
-  const [target, setTarget] = useState(3);
-  const [provisioned, setProvisioned] = useState(false);
-  const [coins, setCoins] = useState(590);
+  const [loaded] = useState(readSaved);
+  const [data, setData] = useState<PersonalState>(loaded.state);
+  const [storageError, setStorageError] = useState(loaded.error);
+  const [canSave, setCanSave] = useState(!loaded.error);
+  const [asOf, setAsOf] = useState(localDate());
   const [hidden, setHidden] = useState(true);
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [launch, setLaunch] = useState<TxKind | null>(null);
-  const [amount, setAmount] = useState('');
+  const [launch, setLaunch] = useState<MovementKind | null>(null);
+  const [wallet, setWallet] = useState<Wallet>('cash');
+  const [source, setSource] = useState<'other' | 'salary' | 'benefit'>('other');
+  const [preset, setPreset] = useState({ description: '', value: '', billId: '' });
+  const [formError, setFormError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [weather, setWeather] = useState<ValeWeather | null>(null);
   const [vale, setVale] = useState<ValeHandle | null>(null);
-
-  const txs = useMemo(() => [...baseTxs, ...extra], [baseTxs, extra]);
-  const f = useMemo(
-    () => computeForecast({ txs, cashCents: Math.round(cash * 100), asOf, taxRate: tax / 100, targetRunwayMonths: target, taxProvisioned: provisioned }),
-    [txs, cash, tax, target, provisioned, asOf],
-  );
-
-  const stageIdx = STAGES.findIndex((s) => s.id === f.stage);
-  const cur = STAGES[stageIdx] ?? STAGES[0]!;
-  const runway = f.runwayNoIncomeMonths ?? 12;
-  const prevAt = stageIdx > 0 ? (STAGES[stageIdx - 1]?.at ?? 0) : 0;
-  const progress = Math.max(0, Math.min(1, (runway - prevAt) / Math.max(0.1, cur.at - prevAt)));
-  const probable = f.scenarios.provavel;
-
-  const labels = useMemo<Partial<Record<LabelId, string>>>(
-    () => ({
-      garagem: `Fôlego ${months(f.runwayNoIncomeMonths)}`,
-      coworking: `Burn ${brl(f.burnCents)}`,
-      escritorio: `Meta ${target} meses de fôlego`,
-      campus: `${f.monthsInBlack} meses no azul`,
-      torre: 'Unicórnio',
-      compliance: provisioned ? 'Imposto separado' : 'Imposto a separar',
-      conselho: f.alerts.length === 0 ? 'Sem alertas' : `${f.alerts.length} ${f.alerts.length === 1 ? 'alerta' : 'alertas'}`,
-      cafe: `Pró-labore ${brl(f.proLaboreSugeridoCents)}`,
-    }),
-    [f, target, provisioned],
-  );
-
-  const onReady = useCallback((h: ValeHandle | null) => setVale(h), []);
-  const night = weather ? !weather.isDay : false;
-
+  useEffect(() => { const id = setInterval(() => setAsOf(localDate()), 60000); return () => clearInterval(id); }, []);
   useEffect(() => {
-    if (!toast) return;
-    const id = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(id);
-  }, [toast]);
-
-  const closeLaunch = () => {
-    setLaunch(null);
-    setAmount('');
+    if (!canSave) return;
+    try { localStorage.setItem(STORE, JSON.stringify(data)); setStorageError(''); }
+    catch { setStorageError('O navegador não conseguiu salvar. Esta sessão continua aberta, mas as alterações podem se perder ao sair.'); }
+  }, [data, canSave]);
+  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 4200); return () => clearTimeout(id); }, [toast]);
+  useEffect(() => { const close = (e: KeyboardEvent) => { if (e.key === 'Escape') { setLaunch(null); setPanel(null); } }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, []);
+  const summary = useMemo(() => personalSummary(data, asOf), [data, asOf]);
+  const txs = useMemo<Tx[]>(() => [
+    ...(data.demo ? demoTxs(asOf) : []),
+    ...data.movements.filter(m => m.wallet === 'cash' && ['income', 'fixed', 'daily'].includes(m.kind)).map(m => ({ occurredOn: m.date, kind: m.kind === 'income' ? 'in' as const : 'out' as const, amountCents: m.amountCents, status: 'paid' as const, category: m.kind })),
+  ], [data, asOf]);
+  const f = useMemo(() => computeForecast({ txs, cashCents: summary.cash, asOf, taxRate: data.tax / 100, targetRunwayMonths: data.target, taxProvisioned: data.provisioned }), [txs, summary.cash, asOf, data.tax, data.target, data.provisioned]);
+  const monthlyFixed = data.bills.reduce((sum, b) => sum + b.amountCents, 0);
+  const burn = Math.max(f.burnCents, monthlyFixed + summary.dailyCash);
+  const runway = burn > 0 ? Math.max(0, summary.cash) / burn : 0;
+  const stage = stageFor(runway, { taxProvisioned: data.provisioned, monthsInBlack: f.monthsInBlack, proLaboreMonths: f.proLaboreMonths });
+  const stageIdx = STAGES.findIndex(s => s.id === stage);
+  const cur = STAGES[stageIdx] ?? STAGES[0]!;
+  const prevAt = stageIdx > 0 ? (STAGES[stageIdx - 1]?.at ?? 0) : 0;
+  const progress = Math.max(0, Math.min(1, (runway - prevAt) / Math.max(.1, cur.at - prevAt)));
+  const alerts = [...summary.alerts, ...f.alerts];
+  const money = (cents: number) => hidden ? 'R$ ••••' : brl(cents);
+  const labels: Partial<Record<LabelId, string>> = {
+    garagem: `${cur.name} · sua jornada`, coworking: 'Trabalho e novas ideias', escritorio: 'Seu próximo capítulo', campus: 'Cresça com consistência', torre: 'Grandes conquistas', compliance: 'Planeje suas contas', conselho: `${alerts.length} avisos`, cafe: 'Pequenas pausas',
+    banco: !data.profile.savingsGoalCents ? 'Defina sua meta mensal' : summary.goalRemaining > 0 ? 'Sua meta precisa de atenção' : 'Meta do mês concluída', mercado: 'Carteira de alimentação', padaria: 'Registre o dia a dia',
   };
-  const confirmLaunch = () => {
-    const value = Number(amount.replace(',', '.'));
-    if (!launch || !Number.isFinite(value) || value <= 0) return;
-    const cents = Math.round(value * 100);
-    setExtra((p) => [...p, { occurredOn: asOf, kind: launch, amountCents: cents, status: 'paid' }]);
-    if (launch === 'in') setCash((c) => c + value);
-    if (launch === 'out') setCash((c) => Math.max(0, c - value));
-    setCoins((c) => c + 10);
-    setToast(`${LAUNCH[launch]} lançada: ${brl(cents)}. +10 equity`);
-    closeLaunch();
+  const onReady = useCallback((handle: ValeHandle | null) => setVale(handle), []);
+  const onSelect = useCallback((id: LabelId) => { const map: Record<LabelId, Panel> = { garagem: 'caixa', coworking: 'cenarios', escritorio: 'marcos', campus: 'marcos', torre: 'marcos', compliance: 'fixas', conselho: 'conselho', cafe: 'padaria', banco: 'banco', mercado: 'mercado', padaria: 'padaria' }; setPanel(map[id]); }, []);
+  function begin(kind: MovementKind, options: { wallet?: Wallet; description?: string; cents?: number; billId?: string; source?: 'salary' | 'benefit' } = {}) {
+    setWallet(options.wallet ?? 'cash'); setSource(options.source ?? 'other');
+    setPreset({ description: options.description ?? '', value: options.cents === undefined ? '' : (options.cents / 100).toFixed(2).replace('.', ','), billId: options.billId ?? '' });
+    setFormError(''); setLaunch(kind);
+  }
+  function submitMovement(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); if (!launch) return;
+    try {
+      const form = new FormData(e.currentTarget);
+      const movement: Movement = { id: crypto.randomUUID(), date: valueOf(form, 'date'), description: valueOf(form, 'description'), amountCents: inputCents(form, 'amount'), kind: launch, wallet: source === 'benefit' ? 'food' : wallet, ...(preset.billId ? { billId: preset.billId } : {}), ...(launch === 'income' && source !== 'other' ? { source } : {}) };
+      const next = addMovement(data, movement, asOf); setData(next); setLaunch(null); setToast(`${KIND_LABEL[launch]} registrada. +10 equity`);
+    } catch (error) { setFormError(error instanceof Error ? error.message : 'Não foi possível registrar.'); }
+  }
+  function saveProfile(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    try {
+      const form = new FormData(e.currentTarget);
+      const profile = { name: valueOf(form, 'name').trim() || 'Fundador', salaryCents: inputCents(form, 'salary'), foodCents: inputCents(form, 'food'), savingsGoalCents: inputCents(form, 'goal') };
+      const start = data.demo && form.get('start') === 'on';
+      setData({ ...data, profile, ...(start ? { demo: false, movements: [], bills: [], openingCashCents: inputCents(form, 'openingCash'), openingFoodCents: inputCents(form, 'openingFood'), openingSavingsCents: inputCents(form, 'openingSavings') } : {}) });
+      setToast(start ? 'Seu perfil está pronto. Registre suas contas fixas para começar.' : 'Perfil salvo. Valores previstos não são creditados automaticamente.');
+    } catch (error) { setToast(error instanceof Error ? error.message : 'Confira os valores.'); }
+  }
+  function addBill(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); const form = new FormData(e.currentTarget);
+    try {
+      const amountCents = inputCents(form, 'amount'); const name = valueOf(form, 'name').trim(); const dueDay = Number(form.get('day'));
+      if (!amountCents || !name || !Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) throw new Error('Informe nome, valor positivo e dia de vencimento entre 1 e 31.');
+      setData({ ...data, bills: [...data.bills, { id: crypto.randomUUID(), name, amountCents, dueDay }] }); e.currentTarget.reset(); setToast('Conta fixa cadastrada. O pagamento será registrado por você.');
+    } catch (error) { setToast(error instanceof Error ? error.message : 'Confira a conta.'); }
+  }
+  const ledger = (filter: (m: Movement) => boolean) => {
+    const entries = [...data.movements].filter(filter).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 40);
+    return <div className="ledger">{entries.length ? entries.map(m => <div className="ledger-row" key={m.id}><span><b>{m.description}</b><small>{m.date.split('-').reverse().join('/')} · {KIND_LABEL[m.kind]}{m.wallet === 'food' ? ' · vale' : ''}</small></span><strong className={m.kind === 'income' ? 'l-verde' : ''}>{money(m.amountCents)}</strong><button className="remove-bill" aria-label={`Excluir lançamento ${m.description}`} title="Excluir lançamento e recalcular os saldos" onClick={() => { try { setData(removeMovement(data, m.id)); setToast('Lançamento excluído e saldos recalculados.'); } catch (error) { setToast(error instanceof Error ? error.message : 'Não foi possível excluir.'); } }}><Icon name="close" /></button></div>) : <p className="muted">Nenhum lançamento por aqui ainda.</p>}</div>;
   };
+  const goalProgress = data.profile.savingsGoalCents ? Math.min(100, summary.savedThisMonth / data.profile.savingsGoalCents * 100) : 0;
 
-  return (
-    <div className={`app ${night ? 'night' : 'day'}`}>
-      <Suspense fallback={<div className="vale-stage" />}>
-        <Vale stage={f.stage} labels={labels} onReady={onReady} onWeather={setWeather} />
-      </Suspense>
-
-      <header className="topbar glass">
-        <div className="brand"><span className="brand-mark"><Icon name="home" /></span><div>Garagem<small>SMALL START. BIG FUTURE.</small></div></div>
-        <div className="level" title={`Fôlego ${months(f.runwayNoIncomeMonths)}`}>
-          <b>Nível {stageIdx + 1}</b>
-          <span className="xp"><i style={{ width: `${Math.round(progress * 100)}%` }} /></span>
-          <small>{cur.name}</small>
-        </div>
-        <div className="spacer" />
-        <div className="location"><span className="live-dot" /> SILICON VALLEY <small>Califórnia, EUA</small></div>
-        {weather && (
-          <div className="chip weather" title="Clima real da sua localização">
-            {WEATHER[weather.kind]}{weather.tempC !== null ? ` · ${Math.round(weather.tempC)}°C` : ''}{weather.isDay ? '' : ' · noite'}
-          </div>
-        )}
-        <div className="chip coins" title="Equity">
-          <span className="coin" />
-          {coins.toLocaleString('pt-BR')}
-          <small>equity</small>
-        </div>
-        <button className="icon-btn" aria-label="Conselho" onClick={() => setPanel('conselho')}>
-          <Icon name="bell" />
-          {f.alerts.length > 0 && <em>{f.alerts.length}</em>}
-        </button>
-        <button className="profile" disabled title="Em breve">
-          <Icon name="user" /> Perfil
-        </button>
-      </header>
-
-      <nav className="sidebar glass" aria-label="Menu">
-        {NAV.map((n) => (
-          <button key={n.id} className={panel === n.id ? 'on' : ''} onClick={() => setPanel(panel === n.id ? null : n.id)}>
-            <Icon name={n.icon} />
-            <span>{n.label}</span>
-            {n.id === 'conselho' && f.alerts.length > 0 && <em>{f.alerts.length}</em>}
-          </button>
-        ))}
-      </nav>
-
-      <section className="balance glass" aria-label="Saldo">
-        <div className="balance-heading"><span>SEU QG FINANCEIRO</span><span className="demo-tag">Demo</span></div>
-        <div className="bal-row">
-          <div>
-            <small>Caixa da startup</small>
-            <strong>{hidden ? 'R$ ••••••' : brl(Math.round(cash * 100))}</strong>
-          </div>
-          <div>
-            <small>Projetado em 30 dias</small>
-            <strong className={`l-${probable.light}`}>{hidden ? 'R$ ••••' : brl(probable.projected30dCents)}</strong>
-          </div>
-          <button className="icon-btn flat" aria-label={hidden ? 'Mostrar valores' : 'Ocultar valores'} onClick={() => setHidden((h) => !h)}>
-            <Icon name={hidden ? 'eye' : 'eyeoff'} />
-          </button>
-          <button className={`icon-btn flat chev ${open ? 'up' : ''}`} aria-label="Detalhes" onClick={() => setOpen((o) => !o)}>
-            <Icon name="chevron" />
-          </button>
-        </div>
-        {open && (
-          <div className="bal-more">
-            <div><small>Fôlego sem entradas</small><b>{months(f.runwayNoIncomeMonths)}</b></div>
-            <div><small>Burn mensal</small><b>{hidden ? 'R$ ••••' : brl(f.burnCents)}</b></div>
-            <div><small>Pró-labore sugerido</small><b>{hidden ? 'R$ ••••' : brl(f.proLaboreSugeridoCents)}</b></div>
-          </div>
-        )}
-      </section>
-
-      <section className="journey glass" aria-label="Evolução da startup">
-        <div className="journey-icon"><Icon name="flag" /></div>
-        <span>UM PASSO DE CADA VEZ</span>
-        <h1>Grandes ideias.<br />Pequenos começos.</h1>
-        <p>Sua próxima conquista começa com as finanças em dia.</p>
-        <button onClick={() => setPanel('marcos')}>Explorar meus marcos <span>↗</span></button>
-      </section>
-
-      <div className="map-caption"><span className="live-dot" /> SEU VALE, SEU FUTURO <small>Arraste para explorar · Role para aproximar</small></div>
-
-      {panel && (
-        <aside className="drawer glass" aria-label={TITLES[panel]}>
-          <div className="drawer-head">
-            <h2>{TITLES[panel]}</h2>
-            <button className="icon-btn flat" aria-label="Fechar" onClick={() => setPanel(null)}><Icon name="close" /></button>
-          </div>
-          <div className="drawer-body">
-            {panel === 'caixa' && (
-              <div className="grid2">
-                <div className="tile"><span>Fôlego sem nenhuma entrada</span><strong>{months(f.runwayNoIncomeMonths)}</strong></div>
-                <div className="tile"><span>Custo mensal (burn)</span><strong>{brl(f.burnCents)}</strong></div>
-                <div className="tile"><span>Pró-labore sugerido</span><strong>{brl(f.proLaboreSugeridoCents)}</strong></div>
-                <div className="tile"><span>Meses seguidos no azul</span><strong>{f.monthsInBlack}</strong></div>
-                <p className="muted full">Confiança da projeção: {f.confidence === 'media' ? 'média' : f.confidence}. {supabase ? 'Conectado ao Supabase.' : 'Dados de demonstração.'}</p>
-              </div>
-            )}
-            {panel === 'cenarios' && (
-              <div className="stack">
-                {SCENARIOS.map(([id, label]) => {
-                  const s = f.scenarios[id];
-                  return (
-                    <div key={id} className={`tile light-${s.light}`}>
-                      <span>{label}</span>
-                      <strong>{brl(s.projected30dCents)}</strong>
-                      <small>{LIGHT[s.light]} · receita {brl(s.incomeCents)}, imposto {brl(s.taxCents)}</small>
-                      <small>{s.runwayMonths === null ? 'Sem consumo de caixa' : `Caixa dura ${months(s.runwayMonths)} nesse ritmo`}</small>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {panel === 'conselho' &&
-              (f.alerts.length === 0 ? (
-                <p className="muted">O Conselho não tem nada a reclamar hoje.</p>
-              ) : (
-                <ul className="alerts">
-                  {f.alerts.map((a) => (
-                    <li key={a.code} className={`sev-${a.severity}`}>{a.message}</li>
-                  ))}
-                </ul>
-              ))}
-            {panel === 'marcos' && (
-              <ol className="ladder">
-                {STAGES.map((s, i) => (
-                  <li key={s.id} className={i < stageIdx ? 'done' : i === stageIdx ? 'now' : ''}>
-                    <b>{s.name}</b>
-                    <span>{s.rule}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {panel === 'ajustes' && (
-              <div className="stack">
-                <label>Caixa hoje (R$)<input type="number" min="0" step="100" value={cash} onChange={(e) => setCash(Number(e.target.value) || 0)} /></label>
-                <label>Imposto sobre a receita (%)<input type="number" min="0" max="60" value={tax} onChange={(e) => setTax(Number(e.target.value) || 0)} /></label>
-                <label>Meta de fôlego (meses)<input type="number" min="1" max="24" value={target} onChange={(e) => setTarget(Number(e.target.value) || 1)} /></label>
-                <label className="check"><input type="checkbox" checked={provisioned} onChange={(e) => setProvisioned(e.target.checked)} /> Imposto separado a cada entrada</label>
-              </div>
-            )}
-          </div>
-        </aside>
-      )}
-
-      <div className="dock glass" role="toolbar" aria-label="Lançar">
-        <button className="out" onClick={() => setLaunch('out')}><Icon name="minus" /> Despesa</button>
-        <button className="in" onClick={() => setLaunch('in')}><Icon name="plus" /> Receita</button>
-        <button className="tr" onClick={() => setLaunch('transfer')}><Icon name="swap" /> Transferência</button>
-      </div>
-
-      <div className="zoom glass">
-        <button aria-label="Aproximar" onClick={() => vale?.zoom(0.8)}><Icon name="plus" /></button>
-        <button aria-label="Afastar" onClick={() => vale?.zoom(1.25)}><Icon name="minus" /></button>
-        <button aria-label="Centralizar" onClick={() => vale?.reset()}><Icon name="home" /></button>
-      </div>
-
-      {launch && (
-        <div className="modal-back" onClick={closeLaunch}>
-          <form
-            className="modal glass"
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => {
-              e.preventDefault();
-              confirmLaunch();
-            }}
-          >
-            <h2>{LAUNCH[launch]}</h2>
-            <label>Valor (R$)<input autoFocus inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
-            <div className="modal-actions">
-              <button type="button" className="ghost" onClick={closeLaunch}>Cancelar</button>
-              <button type="submit" className="primary">Lançar</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {toast && <div className="toast glass" role="status">{toast}</div>}
-    </div>
-  );
+  return <div className={`app ${weather && !weather.isDay ? 'night' : 'day'}`}>
+    <Suspense fallback={<div className="vale-stage" />}><Vale stage={stage} labels={labels} onReady={onReady} onWeather={setWeather} onSelect={onSelect} /></Suspense>
+    <header className="topbar glass">
+      <div className="brand"><span className="brand-mark"><Icon name="home" /></span><div>Garagem<small>SUA VIDA GANHA UM NOVO VALE.</small></div></div>
+      <button className="level" onClick={() => setPanel('marcos')}><b>Nível {stageIdx + 1}</b><span className="xp"><i style={{ width: `${progress * 100}%` }} /></span><small>{cur.name}</small></button>
+      <div className="spacer" /><div className="location"><span className="live-dot" /> SEU VALE <small>Cidade, praia e novas possibilidades</small></div>
+      {weather && <div className="chip weather" title="Clima da sua localização">{WEATHER[weather.kind]}{weather.tempC !== null ? ` · ${Math.round(weather.tempC)}°C` : ''}</div>}
+      <div className="chip coins"><span className="coin" />{(data.movements.length * 10 + (data.demo ? 590 : 0)).toLocaleString('pt-BR')}<small>equity</small></div>
+      <button className="icon-btn" aria-label="Conselho" onClick={() => setPanel('conselho')}><Icon name="bell" />{alerts.length > 0 && <em>{alerts.length}</em>}</button>
+      <button className="profile" onClick={() => setPanel('perfil')}><Icon name="user" /><span>Perfil</span></button>
+    </header>
+    <nav className="sidebar glass" aria-label="Menu">{NAV.map(n => <button key={n.id} className={panel === n.id ? 'on' : ''} onClick={() => setPanel(panel === n.id ? null : n.id)}><Icon name={n.icon} /><span>{n.label}</span>{n.id === 'conselho' && alerts.length > 0 && <em>{alerts.length}</em>}</button>)}</nav>
+    <section className="balance glass" aria-label="Saldo">
+      <div className="balance-heading"><span>SUA VIDA FINANCEIRA</span><button className="demo-tag" onClick={() => setPanel('perfil')}>{data.demo ? 'Demo · configurar' : data.profile.name}</button></div>
+      <div className="bal-row"><div><small>Dinheiro disponível</small><strong>{money(summary.cash)}</strong></div><div><small>Após fixas pendentes e meta</small><strong className={summary.availableAfterCommitments >= 0 ? 'l-verde' : 'l-vermelho'}>{money(summary.availableAfterCommitments)}</strong></div><button className="icon-btn flat" aria-label={hidden ? 'Mostrar valores' : 'Ocultar valores'} onClick={() => setHidden(!hidden)}><Icon name={hidden ? 'eye' : 'eyeoff'} /></button><button className={`icon-btn flat chev ${open ? 'up' : ''}`} aria-label="Detalhes dos saldos" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="chevron" /></button></div>
+      {open && <div className="bal-more"><div><small>Vale-alimentação</small><b>{money(summary.food)}</b></div><div><small>Guardado no banco</small><b>{money(summary.savings)}</b></div><div><small>Saídas fixas pendentes</small><b>{money(summary.pendingFixed)}</b></div></div>}
+    </section>
+    <section className="journey glass"><div className="journey-icon"><Icon name="flag" /></div><span>SEU BANCO LEMBRA POR VOCÊ</span><h1>Um futuro melhor.<br />Um mês de cada vez.</h1><p>{data.profile.savingsGoalCents ? `Meta mensal: ${money(data.profile.savingsGoalCents)}` : 'Defina quanto quer guardar no seu perfil.'}</p><div className="goal-track"><i style={{ width: `${goalProgress}%` }} /></div><p>{summary.goalRemaining ? `Faltam ${money(summary.goalRemaining)} para a meta.` : 'Meta do mês em dia.'}</p><button onClick={() => setPanel('banco')}>Visitar meu banco <span>↗</span></button></section>
+    <div className="map-caption"><span className="live-dot" /> EXPLORE SUA CIDADE <small>Clique nos prédios · Arraste para explorar · Role para aproximar</small></div>
+    {panel && <aside className="drawer glass" aria-label={TITLES[panel]}><div className="drawer-head"><h2>{TITLES[panel]}</h2><button className="icon-btn flat" aria-label="Fechar painel" onClick={() => setPanel(null)}><Icon name="close" /></button></div><div className="drawer-body stack">
+      {panel === 'perfil' && <form className="stack" onSubmit={saveProfile} key={String(data.demo)}><p className="muted">Salário e vale são previsões. Registre o recebimento quando o dinheiro entrar. Seus dados ficam neste navegador.</p><label>Como você se chama?<input name="name" defaultValue={data.profile.name} maxLength={50} required /></label><label>Salário mensal líquido (R$)<input name="salary" inputMode="decimal" defaultValue={(data.profile.salaryCents / 100).toFixed(2)} required /></label><label>Vale-alimentação mensal (R$)<input name="food" inputMode="decimal" defaultValue={(data.profile.foodCents / 100).toFixed(2)} required /></label><label>Quanto quer guardar por mês (R$)<input name="goal" inputMode="decimal" defaultValue={(data.profile.savingsGoalCents / 100).toFixed(2)} required /></label>{data.demo && <fieldset><legend>Começar com meus dados</legend><p className="muted">Ao marcar abaixo, os exemplos de contas e lançamentos serão retirados. Informe os saldos que você já tem hoje.</p><label>Saldo em dinheiro (R$)<input name="openingCash" inputMode="decimal" defaultValue="0,00" required /></label><label>Saldo atual do vale (R$)<input name="openingFood" inputMode="decimal" defaultValue="0,00" required /></label><label>Já guardado no banco (R$)<input name="openingSavings" inputMode="decimal" defaultValue="0,00" required /></label><label className="check"><input type="checkbox" name="start" /> Retirar demonstração e usar meus saldos</label></fieldset>}<button className="primary action" type="submit">Salvar perfil</button><button className="text-link" type="button" onClick={() => begin('income', { source: 'salary', description: 'Salário recebido', cents: data.profile.salaryCents })}>Registrar salário já recebido ↗</button></form>}
+      {panel === 'caixa' && <><div className="grid2"><Metric label="Entradas neste mês" value={money(summary.income)} /><Metric label="Fixas pagas" value={money(summary.fixedPaid)} /><Metric label="Gastos diários em dinheiro" value={money(summary.dailyCash)} /><Metric label="Saldo livre após compromissos" value={money(summary.availableAfterCommitments)} /></div><div className="button-row"><button className="primary action" onClick={() => begin('income')}>Nova entrada</button><button className="ghost action" onClick={() => begin('daily')}>Gasto diário</button></div><button className="text-link" onClick={() => setPanel('cenarios')}>Ver cenários e planejamento ↗</button><h3>Seus lançamentos</h3>{ledger(() => true)}</>}
+      {panel === 'fixas' && <><p className="muted">Aluguel, luz, água, condomínio, assinaturas. As contas voltam a ficar pendentes a cada mês, sem débito automático.</p><Metric label="Ainda a pagar neste mês" value={money(summary.pendingFixed)} /><div className="bill-list">{data.bills.map(b => { const paid = !summary.unpaidBills.some(u => u.id === b.id); return <div className="bill" key={b.id}><div><b>{b.name}</b><small>Todo dia {b.dueDay} · {money(b.amountCents)}</small></div><button className={paid ? 'paid-tag' : 'text-link'} disabled={paid} onClick={() => begin('fixed', { description: b.name, cents: b.amountCents, billId: b.id })}>{paid ? 'Paga' : 'Pagar'}</button><button className="remove-bill" aria-label={`Remover recorrência de ${b.name}`} title="Retirar das próximas contas; pagamentos anteriores são mantidos" onClick={() => { setData({ ...data, bills: data.bills.filter(x => x.id !== b.id) }); setToast('Recorrência removida. Os pagamentos anteriores foram mantidos.'); }}><Icon name="close" /></button></div>; })}</div><h3>Adicionar conta fixa</h3><form className="stack" onSubmit={addBill}><label>Nome<input name="name" placeholder="Ex.: aluguel" maxLength={80} required /></label><div className="grid2"><label>Valor (R$)<input name="amount" inputMode="decimal" placeholder="0,00" required /></label><label>Dia do vencimento<input name="day" type="number" min="1" max="31" defaultValue="10" required /></label></div><button className="primary action">Adicionar conta</button></form></>}
+      {panel === 'banco' && <><div className="place-banner bank-banner"><small>BANCO DO VALE</small><h3>Seu futuro tem endereço.</h3><p>Guarde de verdade no seu controle, sem misturar a reserva com o saldo para gastar.</p></div><div className="grid2"><Metric label="Total guardado" value={money(summary.savings)} /><Metric label="Meta mensal" value={money(data.profile.savingsGoalCents)} /><Metric label="Guardado líquido neste mês" value={money(summary.savedThisMonth)} /><Metric label="Falta guardar" value={money(summary.goalRemaining)} /></div><div className="goal-track"><i style={{ width: `${goalProgress}%` }} /></div>{summary.alerts.map(a => <p key={a.code} className={`notice sev-${a.severity}`}>{a.message}</p>)}<div className="button-row"><button className="primary action" onClick={() => begin('save', { description: 'Reserva mensal', ...(summary.goalRemaining ? { cents: summary.goalRemaining } : {}) })}>Guardar dinheiro</button><button className="ghost action" onClick={() => begin('withdraw', { description: 'Resgate da reserva' })}>Resgatar</button></div><button className="text-link" onClick={() => setPanel('perfil')}>Editar meta no perfil ↗</button><p className="muted">Este banco é seu controle financeiro no jogo. Os registros não movimentam sua conta bancária real.</p>{ledger(m => m.kind === 'save' || m.kind === 'withdraw')}</>}
+      {panel === 'mercado' && <><div className="place-banner market-banner"><small>MERCADO DO VALE</small><h3>Seu vale, bem aproveitado.</h3><p>Compras de alimentação com carteira separada.</p></div><div className="grid2"><Metric label="Saldo do vale" value={money(summary.food)} /><Metric label="Vale gasto no mês" value={money(summary.foodSpent)} /></div><p className="muted">Benefício mensal previsto: {money(data.profile.foodCents)}. O saldo acumula até você registrar as compras.</p><div className="button-row"><button className="primary action" onClick={() => begin('daily', { wallet: 'food', description: 'Compras no mercado' })}>Comprar com vale</button><button className="ghost action" onClick={() => begin('daily', { description: 'Compras no mercado' })}>Pagar em dinheiro</button></div><button className="text-link" onClick={() => begin('income', { wallet: 'food', source: 'benefit', description: 'Crédito do vale-alimentação', cents: data.profile.foodCents })}>Registrar recebimento do vale ↗</button>{ledger(m => m.wallet === 'food')}</>}
+      {panel === 'padaria' && <><div className="place-banner bakery-banner"><small>PADARIA DA ESQUINA</small><h3>Os pequenos gastos contam.</h3><p>Café, pão, transporte, lazer: registre o que aparece no dia a dia.</p></div><Metric label="Gastos diários em dinheiro no mês" value={money(summary.dailyCash)} /><button className="primary action" onClick={() => begin('daily', { description: 'Padaria' })}>Registrar gasto diário</button>{ledger(m => m.kind === 'daily' && m.wallet === 'cash')}</>}
+      {panel === 'conselho' && <>{alerts.length ? alerts.map((a, i) => <p key={`${a.code}-${i}`} className={`notice sev-${a.severity}`}>{a.message}</p>) : <p className="muted">Tudo em dia por aqui.</p>}<button className="text-link" onClick={() => setPanel('banco')}>Abrir banco e revisar minha meta ↗</button></>}
+      {panel === 'cenarios' && <><h3>Planejamento até o fim do mês</h3><div className="grid2"><Metric label="Salário ainda previsto" value={money(summary.salaryPending)} /><Metric label="Fixas pendentes" value={money(summary.pendingFixed)} /><Metric label="Estimativa de diários restantes" value={money(summary.estimatedDailyRemaining)} /><Metric label="Livre estimado após a meta" value={money(summary.projectedFree)} /></div><p className="muted">Estimativa: saldo atual + salário ainda não recebido − fixas pendentes − meta restante − diários projetados pelo ritmo deste mês. O vale é separado.</p><h3>Histórico: próximo mês</h3>{f.monthsOfData ? SCENARIOS.map(([id, label]) => <div key={id} className={`tile light-${f.scenarios[id].light}`}><span>{label}</span><strong>{money(f.scenarios[id].projected30dCents)}</strong><small>{LIGHT[f.scenarios[id].light]} · imposto {money(f.scenarios[id].taxCents)}</small></div>) : <p className="muted">Os três cenários aparecem quando houver meses completos de histórico. Seu perfil já alimenta o planejamento acima.</p>}<p className="muted">Fôlego estimado atual: {burn ? months(runway) : 'cadastre suas contas para calcular'}. {data.demo ? 'O histórico dos cenários é demonstrativo.' : 'Projeções não garantem recebimentos.'}</p></>}
+      {panel === 'marcos' && <ol className="ladder">{STAGES.map((s, i) => <li key={s.id} className={i < stageIdx ? 'done' : i === stageIdx ? 'now' : ''}><b>{s.name}</b><span>{s.rule}</span></li>)}</ol>}
+      {panel === 'ajustes' && <><button className="primary action" onClick={() => setPanel('perfil')}>Abrir meu perfil financeiro</button><label>Imposto sobre entradas em dinheiro (%)<input type="number" min="0" max="60" value={data.tax} onChange={e => setData({ ...data, tax: Math.min(60, Math.max(0, Number(e.target.value) || 0)) })} /></label><label>Meta de fôlego (meses)<input type="number" min="1" max="24" value={data.target} onChange={e => setData({ ...data, target: Math.min(24, Math.max(1, Math.round(Number(e.target.value) || 1))) })} /></label><label className="check"><input type="checkbox" checked={data.provisioned} onChange={e => setData({ ...data, provisioned: e.target.checked })} /> Imposto provisionado</label><p className="muted">O imposto alimenta os cenários históricos. Os saldos não sofrem débitos automáticos. Dados salvos apenas neste navegador, sem sincronização ou login.</p><button className="ghost action" onClick={() => { const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `garagem-${asOf}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }}>Baixar cópia dos meus dados</button></>}
+    </div></aside>}
+    <div className="dock glass" role="toolbar" aria-label="Lançamentos"><button className="out" onClick={() => begin('daily')}><Icon name="minus" />Saída</button><button className="in" onClick={() => begin('income')}><Icon name="plus" />Entrada</button><button className="tr" onClick={() => begin('save', { description: 'Reserva mensal' })}><Icon name="swap" />Guardar</button></div>
+    <div className="zoom glass"><button aria-label="Aproximar" onClick={() => vale?.zoom(.8)}><Icon name="plus" /></button><button aria-label="Afastar" onClick={() => vale?.zoom(1.25)}><Icon name="minus" /></button><button aria-label="Centralizar" onClick={() => vale?.reset()}><Icon name="home" /></button></div>
+    {launch && <div className="modal-back" onClick={() => setLaunch(null)}><form className="modal glass" role="dialog" aria-modal="true" aria-labelledby="movement-title" onClick={e => e.stopPropagation()} onSubmit={submitMovement}><h2 id="movement-title">{KIND_LABEL[launch]}</h2>{(launch === 'daily' || launch === 'fixed') && !preset.billId && <label>Tipo de saída<select value={launch} onChange={e => { setLaunch(e.target.value as MovementKind); if (e.target.value === 'fixed') setWallet('cash'); }}><option value="daily">Diário: gasto do dia a dia</option><option value="fixed">Fixa: conta planejada</option></select></label>}{launch === 'income' && <label>O que entrou?<select value={source} onChange={e => { const next = e.target.value as typeof source; setSource(next); setWallet(next === 'benefit' ? 'food' : 'cash'); }}><option value="other">Outros recebimentos em dinheiro</option><option value="salary">Salário do mês</option><option value="benefit">Vale-alimentação do mês</option></select></label>}{launch === 'daily' && <label>Forma de pagamento<select value={wallet} onChange={e => setWallet(e.target.value as Wallet)}><option value="cash">Dinheiro / conta</option><option value="food">Vale-alimentação (somente alimentação)</option></select></label>}<label>Descrição<input name="description" defaultValue={preset.description} maxLength={100} placeholder="Ex.: salário, aluguel ou mercado" required autoFocus /></label><div className="grid2"><label>Valor (R$)<input name="amount" inputMode="decimal" defaultValue={preset.value} placeholder="0,00" required /></label><label>Data<input name="date" type="date" defaultValue={asOf} max={asOf} required /></label></div>{launch === 'fixed' && !preset.billId && <p className="muted">Este é um pagamento avulso. Para cadastrar uma recorrência ou quitar uma conta cadastrada, use o painel Fixas.</p>}{formError && <p role="alert" className="form-error">{formError}</p>}<div className="modal-actions"><button type="button" className="ghost" onClick={() => setLaunch(null)}>Cancelar</button><button type="submit" className="primary">Registrar</button></div></form></div>}
+    {storageError && <div className="storage-banner" role="alert">{storageError}{!canSave && <button onClick={() => { setCanSave(true); setStorageError(''); }}>Substituir dados salvos por esta sessão</button>}</div>}
+    {toast && <div className="toast glass" role="status">{toast}</div>}
+  </div>;
 }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="tile"><span>{label}</span><strong>{value}</strong></div>; }

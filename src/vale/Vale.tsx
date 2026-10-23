@@ -10,22 +10,23 @@ interface Props {
   labels: Partial<Record<LabelId, string>>;
   onReady?: (h: ValeHandle | null) => void;
   onWeather?: (w: ValeWeather) => void;
+  onSelect?: (id: LabelId) => void;
 }
 
 /** Cena 3D em tela cheia, ligada ao estágio calculado pelo motor e ao clima real. */
-export function Vale({ stage, labels, onReady, onWeather }: Props) {
+export function Vale({ stage, labels, onReady, onWeather, onSelect }: Props) {
   const [unavailable, setUnavailable] = useState(false);
   const ref = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
   const handle = useRef<ValeHandle | null>(null);
   const initial = useRef(INDEX[stage]);
-  const cb = useRef({ onReady, onWeather });
-  cb.current = { onReady, onWeather };
+  const cb = useRef({ onReady, onWeather, onSelect });
+  cb.current = { onReady, onWeather, onSelect };
   const lastWeather = useRef<ValeWeather | null>(null);
 
   useEffect(() => {
     if (!ref.current || !overlay.current) return;
-    const v = createVale(ref.current, overlay.current, initial.current);
+    const v = createVale(ref.current, overlay.current, initial.current, id => cb.current.onSelect?.(id));
     setUnavailable(!v);
     handle.current = v;
     if (v && lastWeather.current) v.setWeather(lastWeather.current);

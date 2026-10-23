@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DEFAULT_WEATHER, type ValeWeather } from './weather';
-import { buildSiliconValley, CITY_ANCHORS } from './siliconValley';
+import { buildSiliconValley, CITY_ANCHORS, type CityAnchor } from './siliconValley';
 
 export type ValeStage = 1 | 2 | 3 | 4 | 5;
-export type LabelId = 'garagem' | 'compliance' | 'conselho' | 'cafe' | 'coworking' | 'escritorio' | 'campus' | 'torre';
+export type LabelId = CityAnchor['id'];
 
 export interface ValeHandle {
   setStage(n: ValeStage): void;
@@ -16,7 +16,7 @@ export interface ValeHandle {
 }
 
 /** Cena 3D procedural, com prédios ligados ao estágio financeiro atual. */
-export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1): ValeHandle | null {
+export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void): ValeHandle | null {
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -62,14 +62,14 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     const night = !weather.isDay;
     const c = new THREE.Color('#b7cedb');
     let light = 1;
-    let fogNear = 110;
-    let fogFar = 260;
+    let fogNear = 250;
+    let fogFar = 550;
     switch (weather.kind) {
       case 'cloudy': c.lerp(new THREE.Color('#9aa7b3'), 0.45); light = 0.8; break;
-      case 'rain': c.lerp(new THREE.Color('#9aa7b3'), 0.65); light = 0.6; fogNear = 70; fogFar = 190; break;
-      case 'storm': c.lerp(new THREE.Color('#5d6875'), 0.8); light = 0.45; fogNear = 60; fogFar = 160; break;
-      case 'snow': c.lerp(new THREE.Color('#e8eef4'), 0.65); light = 0.85; fogNear = 60; fogFar = 170; break;
-      case 'fog': c.lerp(new THREE.Color('#c4ccd3'), 0.8); light = 0.7; fogNear = 30; fogFar = 130; break;
+      case 'rain': c.lerp(new THREE.Color('#9aa7b3'), 0.65); light = 0.7; fogNear = 160; fogFar = 360; break;
+      case 'storm': c.lerp(new THREE.Color('#5d6875'), 0.8); light = 0.55; fogNear = 120; fogFar = 300; break;
+      case 'snow': c.lerp(new THREE.Color('#e8eef4'), 0.65); light = 0.85; fogNear = 150; fogFar = 340; break;
+      case 'fog': c.lerp(new THREE.Color('#c4ccd3'), 0.8); light = 0.75; fogNear = 90; fogFar = 280; break;
       default: break;
     }
     if (night) {
@@ -85,11 +85,14 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     for (const m of city.windows) m.emissiveIntensity = night ? 0.7 : 0;
   };
 
-  const cam = new THREE.PerspectiveCamera(32, 1, 1, 500);
+  const cam = new THREE.PerspectiveCamera(36, 1, 1, 700);
 
   // etiquetas HTML ancoradas nos prédios
   const labels = CITY_ANCHORS.map((def) => {
-    const el = document.createElement('div');
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.setAttribute('aria-label', `Visitar ${def.name}`);
+    el.addEventListener('click', () => onSelect?.(def.id));
     el.className = 'vale-label';
     el.dataset.id = def.id;
     const name = document.createElement('b');
@@ -103,28 +106,40 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   // câmera: ângulo fixo estilo mapa, arrastar para mover, roda para zoom
   const th = 0.785;
   const ph = 0.92;
-  let rad = 112;
-  let radT = 112;
-  const home = new THREE.Vector3(-9, 0, -8);
+  let rad = 138;
+  let radT = 138;
+  const home = new THREE.Vector3(12, 0, 6);
   const tgt = home.clone();
   let drag: { x: number; y: number } | null = null;
+  let press: { x: number; y: number; moved: boolean } | null = null;
+  const raycaster = new THREE.Raycaster();
   const onDown = (e: PointerEvent) => {
     canvas.setPointerCapture(e.pointerId);
     drag = { x: e.clientX, y: e.clientY };
+    press = { x: e.clientX, y: e.clientY, moved: false };
   };
   const onMove = (e: PointerEvent) => {
     if (!drag) return;
     const k = rad * 0.0016;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) press.moved = true;
     tgt.x += -Math.sin(th) * dx * k - Math.cos(th) * dy * k;
     tgt.z += Math.cos(th) * dx * k - Math.sin(th) * dy * k;
     tgt.x = Math.min(90, Math.max(-90, tgt.x));
     tgt.z = Math.min(70, Math.max(-90, tgt.z));
     drag = { x: e.clientX, y: e.clientY };
   };
-  const onUp = () => {
+  const onUp = (e: PointerEvent) => {
+    if (e.type === 'pointerup' && press && !press.moved) {
+      const rect = canvas.getBoundingClientRect();
+      raycaster.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), cam);
+      const visible = city.buildings.filter(b => b.group.visible && b.scale > .9);
+      const hit = raycaster.intersectObjects(visible.map(b => b.group), true)[0];
+      if (hit) { const building = visible.find(b => b.group.children.includes(hit.object)); if (building) onSelect?.(building.id); }
+    }
     drag = null;
+    press = null;
   };
   const clampRad = (v: number) => Math.min(180, Math.max(30, v));
   const onWheel = (e: WheelEvent) => {
@@ -148,7 +163,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     h = ch;
     renderer.setSize(cw, ch, false);
     cam.aspect = cw / ch;
-    cam.fov = cw < ch ? 52 : 32;
+    cam.fov = cw < ch ? 52 : 36;
     if (cw > 900) cam.setViewOffset(cw, ch, -Math.min(160, cw * .1), 0, cw, ch);
     else cam.clearViewOffset();
     cam.updateProjectionMatrix();
@@ -210,6 +225,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       a.needsUpdate = true;
     }
     if (precip) precip.pts.position.set(tgt.x, 0, tgt.z);
+    if (!reduce) for (const [i, wave] of city.waves.entries()) { wave.position.x = Math.sin(now / 2200 + i * .7) * .5; (wave.material as THREE.MeshBasicMaterial).opacity = (.45 - i * .035) * (.7 + .3 * Math.sin(now / 1800 + i)); }
     for (const car of city.cars) {
       if (!reduce) car.position = ((car.position + 88 + car.direction * dt * car.speed + 176) % 176) - 88;
       const lane = car.road + car.direction * 1.7;
@@ -248,7 +264,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     },
     reset() {
       tgt.copy(home);
-      radT = 112;
+      radT = 138;
     },
     dispose() {
       cancelAnimationFrame(raf);
