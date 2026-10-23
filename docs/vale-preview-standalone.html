@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>O Vale: protótipo 3D da Garagem</title>
+<style>
+:root{--bg:#dbeaf6;--ink:#12304f;--mute:#3f5b78;--panel:rgba(255,255,255,.88);--line:#9db5cc;--acc:#f2c230;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f2a47;--ink:#e8f0f7;--mute:#9db5cc;--panel:rgba(15,42,71,.88);--line:#2f5578;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f2a47;--ink:#e8f0f7;--mute:#9db5cc;--panel:rgba(15,42,71,.88);--line:#2f5578;color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.top{position:absolute;left:16px;top:calc(env(safe-area-inset-top,0px) + 14px);pointer-events:none}
+.top h1{margin:0;font-size:1.5rem;letter-spacing:-.02em}
+.top p{margin:2px 0 0;color:var(--mute);font-size:.9rem}
+.panel{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);max-width:640px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;backdrop-filter:blur(6px)}
+.panel p{margin:0 0 10px;font-size:1rem;line-height:1.4}
+.btns{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+button{font:inherit;font-weight:600;font-size:.85rem;color:var(--ink);background:transparent;border:1.5px solid var(--line);border-radius:6px;padding:10px 4px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:#12304f}
+button:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+#err{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Cidade em 3D que cresce conforme o estágio do caixa"></canvas>
+<div class="top"><h1>O Vale</h1><p>Arraste para girar, role para aproximar.</p></div>
+<div class="panel">
+<p id="cap" aria-live="polite"></p>
+<div class="btns" id="btns"></div>
+</div>
+<div id="err">Seu navegador não conseguiu iniciar o 3D.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+var T=window.THREE;
+var STAGES=[["Garagem","Garagem: menos de 1 mês de fôlego. Todo mundo começa aqui."],["Pré-seed","Pré-seed: 1 a 2 meses de fôlego. O coworking abriu."],["Seed","Seed: 3 meses de fôlego e imposto separado. Escritório próprio."],["Série A","Série A: 6 meses e três meses seguidos no azul. O campus nasce."],["Unicórnio","Unicórnio: 12 meses de fôlego e pró-labore regular. A torre é sua."]];
+var canvas=document.getElementById("c"),renderer;
+try{renderer=new T.WebGLRenderer({canvas:canvas,antialias:true})}catch(e){document.getElementById("err").style.display="flex";return}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
+var reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var scene=new T.Scene();
+function skyColor(){return getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#dbeaf6"}
+function theme(){var c=new T.Color(skyColor());scene.background=c;scene.fog=new T.Fog(c,70,150)}
+theme();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",theme);
+
+var cam=new T.PerspectiveCamera(32,1,1,300);
+scene.add(new T.HemisphereLight(0xffffff,0x88aa88,0.8));
+var sun=new T.DirectionalLight(0xffffff,0.85);sun.position.set(22,38,16);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);var sc=sun.shadow.camera;sc.left=sc.bottom=-40;sc.right=sc.top=40;sc.near=5;sc.far=120;
+scene.add(sun);
+
+function lam(c){return new T.MeshLambertMaterial({color:c})}
+function box(w,h,d,c,x,y,z){var m=new T.Mesh(new T.BoxGeometry(w,h,d),lam(c));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;return m}
+function winMat(w,h,body){
+ var c=document.createElement("canvas");c.width=c.height=32;var g=c.getContext("2d");
+ g.fillStyle=body;g.fillRect(0,0,32,32);g.fillStyle="#8fc4ea";g.fillRect(5,6,22,16);g.fillStyle="rgba(255,255,255,.4)";g.fillRect(5,6,22,5);
+ var t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(Math.max(1,Math.round(w/2.2)),Math.max(1,Math.round(h/2.4)));
+ return new T.MeshLambertMaterial({map:t})}
+function tower(g,x,z,w,d,h,body,roof){
+ var r=lam(roof),m=new T.Mesh(new T.BoxGeometry(w,h,d),[winMat(d,h,body),winMat(d,h,body),r,r,winMat(w,h,body),winMat(w,h,body)]);
+ m.position.set(x,h/2,z);m.castShadow=m.receiveShadow=true;g.add(m);return m}
+function tree(g,x,z,s){
+ var t=new T.Mesh(new T.CylinderGeometry(.18*s,.22*s,1*s,6),lam(0x7a5a3a));t.position.set(x,.5*s,z);t.castShadow=true;
+ var l=new T.Mesh(new T.ConeGeometry(1.1*s,2.6*s,7),lam(0x4f9a6b));l.position.set(x,1.9*s,z);l.castShadow=true;g.add(t,l)}
+
+/* chão e ruas */
+var ground=new T.Mesh(new T.PlaneGeometry(120,120),lam(0xb8d8b0));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+var rx=box(64,.12,3.6,0x5b6b7a,0,.06,0),rz=box(3.6,.12,64,0x5b6b7a,0,.06,0);rx.castShadow=rz.castShadow=false;scene.add(rx,rz);
+
+/* itens por estágio: o prédio nunca some, só cresce */
+var items=[];
+function item(min){var g=new T.Group();scene.add(g);var o={g:g,min:min,k:0};items.push(o);return g}
+
+var g1=item(1); /* garagem */
+g1.add(box(6,3,5,0xf4efe6,-9,1.5,-9));
+var roof=new T.Mesh(new T.ConeGeometry(4.9,1.9,4),lam(0x2d4f7a));roof.rotation.y=Math.PI/4;roof.position.set(-9,3.95,-9);roof.castShadow=true;g1.add(roof);
+g1.add(box(3.2,2.2,.2,0xe0b020,-9,1.1,-6.4));
+g1.add(box(1.2,.9,2.2,0xc0504a,-12.4,.45,-5.2));
+var sign=document.createElement("canvas");sign.width=256;sign.height=64;var sg=sign.getContext("2d");
+sg.fillStyle="#12304f";sg.fillRect(0,0,256,64);sg.fillStyle="#f2c230";sg.font="700 38px system-ui,sans-serif";sg.textAlign="center";sg.textBaseline="middle";sg.fillText("Garagem",128,34);
+var sp=new T.Mesh(new T.PlaneGeometry(3.2,.8),new T.MeshBasicMaterial({map:new T.CanvasTexture(sign)}));sp.position.set(-9,4.9,-6.3);sp.rotation.x=-.0;g1.add(sp);
+
+var g2=item(2); /* coworking */
+tower(g2,9,-9,10,6,4,"#e9eef3","#9aa9b8");
+g2.add(box(10.4,.3,6.4,0xf2c230,9,4.15,-9));
+
+var g3=item(3); /* escritório */
+tower(g3,-10,9,7,7,10,"#dde6ee","#8798ab");
+
+var g4=item(4); /* campus */
+tower(g4,8,8,6,5,6,"#e9eef3","#9aa9b8");
+tower(g4,15,8,5,5,8,"#dde6ee","#8798ab");
+tower(g4,11.5,15,6,4,5,"#e9eef3","#9aa9b8");
+var pond=new T.Mesh(new T.CylinderGeometry(1.2,1.2,.2,32),lam(0x5aa9d6));pond.position.set(11.5,.12,11.8);pond.receiveShadow=true;g4.add(pond);
+
+var g5=item(5); /* torre */
+tower(g5,21,-9,7,7,24,"#cfe0ee","#12304f");
+var crown=box(7.4,1,7.4,0xf2c230,21,24.5,-9);g5.add(crown);
+g5.add(box(.3,4,.3,0xf2c230,21,27,-9));
+
+/* árvores */
+var pts=[[1,[-17,-3],[-3,-17],[-14,-15],[-4,-5.5],[-18,-12],[-20,-4],[-6,-20],[-12,-19]],[3,[4,-16],[18,-14],[20,-4],[3,18],[-4,6],[-18,16],[-6,20],[-20,6]],[4,[3.5,4.5],[4,12],[19,13],[20,19],[5,19],[16,19.5]]];
+pts.forEach(function(p){var g=item(p[0]);for(var i=1;i<p.length;i++)tree(g,p[i][0],p[i][1],.9+((i*37)%5)/10)});
+
+/* carros */
+var cars=[[box(1.8,.7,.9,0xc0504a,0,.45,-.9),1,0,"x"],[box(1.8,.7,.9,0x2d4f7a,0,.45,.9),-1,10,"x"],[box(.9,.7,1.8,0xe0b020,.9,.45,0),1,-8,"z"]];
+cars.forEach(function(c){scene.add(c[0])});
+
+/* câmera */
+var th=.8,ph=.95,rad=42,auto=!reduce,tgt=new T.Vector3(3,3,0);
+function place(){cam.position.set(tgt.x+rad*Math.sin(ph)*Math.cos(th),tgt.y+rad*Math.cos(ph),tgt.z+rad*Math.sin(ph)*Math.sin(th));cam.lookAt(tgt)}
+var ptr={},pd=0;
+canvas.addEventListener("pointerdown",function(e){canvas.setPointerCapture(e.pointerId);ptr[e.pointerId]=[e.clientX,e.clientY];auto=false});
+canvas.addEventListener("pointerup",function(e){delete ptr[e.pointerId];pd=0});
+canvas.addEventListener("pointercancel",function(e){delete ptr[e.pointerId];pd=0});
+canvas.addEventListener("pointermove",function(e){
+ var p=ptr[e.pointerId];if(!p)return;var ids=Object.keys(ptr);
+ if(ids.length===2){var a=ptr[ids[0]],b=ptr[ids[1]];ptr[e.pointerId]=[e.clientX,e.clientY];var d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pd)rad=Math.min(70,Math.max(16,rad*pd/d));pd=d;return}
+ th-=(e.clientX-p[0])*.006;ph=Math.min(1.25,Math.max(.45,ph-(e.clientY-p[1])*.004));ptr[e.pointerId]=[e.clientX,e.clientY]});
+canvas.addEventListener("wheel",function(e){e.preventDefault();rad=Math.min(70,Math.max(16,rad*(1+e.deltaY*.001)))},{passive:false});
+
+/* estágios */
+var stage=3,cap=document.getElementById("cap"),bw=document.getElementById("btns");
+STAGES.forEach(function(s,i){var b=document.createElement("button");b.type="button";b.textContent=s[0];b.addEventListener("click",function(){setStage(i+1)});bw.appendChild(b)});
+function setStage(n){stage=n;cap.textContent=STAGES[n-1][1];[].forEach.call(bw.children,function(b,i){b.setAttribute("aria-pressed",String(i===n-1))})}
+setStage(3);
+
+function size(){var w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();rad=Math.max(rad,w<600?52:rad)}
+new ResizeObserver(size).observe(canvas);size();
+
+var last=performance.now();
+function frame(now){
+ var dt=Math.min(.05,(now-last)/1000);last=now;
+ if(auto)th+=dt*.1;
+ items.forEach(function(o){var t=stage>=o.min?1:0;o.k+=(t-o.k)*Math.min(1,dt*6);o.g.visible=o.k>.01;o.g.scale.y=Math.max(o.k,.001)});
+ if(!reduce)cars.forEach(function(c){var m=c[0];if(c[3]==="x"){c[2]+=c[1]*dt*4;if(c[2]>30)c[2]=-30;if(c[2]<-30)c[2]=30;m.position.x=c[2]}else{c[2]+=c[1]*dt*4;if(c[2]>30)c[2]=-30;m.position.z=c[2]}});
+ place();renderer.render(scene,cam);requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
