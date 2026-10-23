@@ -1,23 +1,37 @@
 import { useEffect, useRef } from 'react';
 import type { StageId } from '../engine/types';
-import { createVale, type ValeHandle, type ValeStage } from './createVale';
-import { fetchWeather } from './weather';
+import { createVale, type LabelId, type ValeHandle, type ValeStage } from './createVale';
+import { fetchWeather, type ValeWeather } from './weather';
 
 const INDEX: Record<StageId, ValeStage> = { garagem: 1, 'pre-seed': 2, seed: 3, 'serie-a': 4, unicornio: 5 };
 
-/** Cena 3D ligada ao estágio calculado pelo motor. */
-export function Vale({ stage }: { stage: StageId }) {
+interface Props {
+  stage: StageId;
+  labels: Partial<Record<LabelId, string>>;
+  onReady?: (h: ValeHandle | null) => void;
+  onWeather?: (w: ValeWeather) => void;
+}
+
+/** Cena 3D em tela cheia, ligada ao estágio calculado pelo motor e ao clima real. */
+export function Vale({ stage, labels, onReady, onWeather }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const overlay = useRef<HTMLDivElement>(null);
   const handle = useRef<ValeHandle | null>(null);
   const initial = useRef(INDEX[stage]);
+  const cb = useRef({ onReady, onWeather });
+  cb.current = { onReady, onWeather };
+  const lastWeather = useRef<ValeWeather | null>(null);
 
   useEffect(() => {
-    if (!ref.current) return;
-    const v = createVale(ref.current, initial.current);
+    if (!ref.current || !overlay.current) return;
+    const v = createVale(ref.current, overlay.current, initial.current);
     handle.current = v;
+    if (v && lastWeather.current) v.setWeather(lastWeather.current);
+    cb.current.onReady?.(v);
     return () => {
       v?.dispose();
       handle.current = null;
+      cb.current.onReady?.(null);
     };
   }, []);
 
@@ -25,7 +39,10 @@ export function Vale({ stage }: { stage: StageId }) {
     const ctl = new AbortController();
     const load = () => {
       void fetchWeather(ctl.signal).then((w) => {
-        if (!ctl.signal.aborted) handle.current?.setWeather(w);
+        if (ctl.signal.aborted) return;
+        lastWeather.current = w;
+        handle.current?.setWeather(w);
+        cb.current.onWeather?.(w);
       });
     };
     load();
@@ -40,5 +57,14 @@ export function Vale({ stage }: { stage: StageId }) {
     handle.current?.setStage(INDEX[stage]);
   }, [stage]);
 
-  return <canvas ref={ref} className="vale-canvas" aria-label="Cidade em 3D que cresce conforme o estágio do caixa" />;
+  useEffect(() => {
+    for (const [id, text] of Object.entries(labels)) handle.current?.setLabel(id as LabelId, text);
+  }, [labels]);
+
+  return (
+    <div className="vale-stage">
+      <canvas ref={ref} className="vale-canvas" aria-label="Mapa do Vale em 3D que cresce conforme o estágio do caixa" />
+      <div ref={overlay} className="vale-overlay" />
+    </div>
+  );
 }
