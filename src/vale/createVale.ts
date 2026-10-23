@@ -320,7 +320,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
       const locked = stage < l.def.min;
       l.el.classList.toggle('is-locked', locked); l.el.disabled = locked;
       l.info.textContent = locked ? `Em obras · Nível ${l.def.min}` : l.text;
-      const show = assetsReady && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
+      const primary = ['garagem', 'compliance', 'conselho', 'cafe', 'banco', 'mercado', 'padaria'].includes(l.def.id);
+      const show = assetsReady && (primary || rad < 145) && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
       l.el.style.visibility = show ? 'visible' : 'hidden';
       if (show) l.el.style.transform = `translate(${((v3.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-v3.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%, -100%)`;
     }

@@ -4,7 +4,8 @@ Todos os assets externos usados na cena ativa têm licença CC0 e são servidos 
 
 | Arquivos | Autor / pack | Fonte e licença |
 | --- | --- | --- |
-| `house-a.glb`, `house-b.glb`, `house-c.glb`, `lodge.glb`, `market.glb`, `bench.glb` | Quaternius, Medieval Village Pack | [Coleção](https://poly.pizza/bundle/Medieval-Village-Pack-NsHhjhlrfY), [lançamento CC0](https://www.patreon.com/quaternius/posts/medieval-village-45532344) |
+| `house-a.glb`, `house-b.glb`, `house-c.glb`, `lodge.glb`, `market.glb` | Kenney, City Kit Suburban 2.0 | [Fonte CC0](https://kenney.nl/assets/city-kit-suburban), licença original em `public/models/nordic/KENNEY-RESIDENTIAL-LICENSE.txt`. Correspondem aos tipos A, B, E, M e T, com cores convertidas para vértices. |
+| `bench.glb` | Quaternius, Medieval Village Pack | [Coleção](https://poly.pizza/bundle/Medieval-Village-Pack-NsHhjhlrfY), [lançamento CC0](https://www.patreon.com/quaternius/posts/medieval-village-45532344). Apenas o banco de praça permanece deste pack. |
 | `rock-a.glb`, `rock-b.glb`, `grass-large.glb`, `tree.glb`, `Textures/colormap.png` | Kenney, Survival Kit | [Fonte CC0](https://kenney.nl/assets/survival-kit), licença original em `public/models/nordic/KENNEY-LICENSE.txt` |
 | `kiara_1_dawn_1k.hdr` | Greg Zaal, Poly Haven | [Fonte](https://polyhaven.com/a/kiara_1_dawn), [licença CC0](https://polyhaven.com/license) |
 

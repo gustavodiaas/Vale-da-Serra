@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { computeForecast, stageFor } from './engine/engine';
-import type { Light, ScenarioId, StageId, Tx } from './engine/types';
+import { computeForecast } from './engine/engine';
+import type { Light, ScenarioId, Tx } from './engine/types';
+import { HOME_STAGES as STAGES, homeJourney } from './homeJourney';
 import { demoTxs } from './demo';
 import { addMovement, createPersonalState, localDate, moneyInput, parsePersonalState, personalSummary, removeMovement, type Movement, type MovementKind, type PersonalState, type Wallet } from './engine/personal';
 import type { LabelId, ValeHandle } from './vale/createVale';
@@ -11,13 +12,6 @@ const Vale = lazy(() => import('./vale/Vale').then((m) => ({ default: m.Vale }))
 const brl = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const months = (n: number | null) => (n === null ? 'sem custos' : n >= 12 ? '12 meses ou mais' : `${n.toFixed(1).replace('.', ',')} meses`);
 
-const STAGES: { id: StageId; name: string; rule: string; at: number }[] = [
-  { id: 'garagem', name: 'Garagem', rule: 'Fôlego abaixo de 1 mês', at: 1 },
-  { id: 'pre-seed', name: 'Pré-seed', rule: 'Fôlego de 1 a 2 meses', at: 3 },
-  { id: 'seed', name: 'Seed', rule: '3 meses de fôlego e imposto separado', at: 6 },
-  { id: 'serie-a', name: 'Série A', rule: '6 meses de fôlego e 3 meses seguidos no azul', at: 12 },
-  { id: 'unicornio', name: 'Unicórnio', rule: '12 meses de fôlego e pró-labore por 6 meses seguidos', at: 12 },
-];
 const SCENARIOS: [ScenarioId, string][] = [
   ['pessimista', 'Mês ruim'],
   ['provavel', 'Mês provável'],
@@ -55,9 +49,9 @@ type Panel = 'caixa' | 'cenarios' | 'conselho' | 'marcos' | 'ajustes' | 'perfil'
 const NAV: { id: Panel; label: string; icon: keyof typeof ICONS }[] = [
   { id: 'caixa', label: 'Carteira', icon: 'wallet' }, { id: 'fixas', label: 'Fixas', icon: 'home' },
   { id: 'banco', label: 'Banco', icon: 'flag' }, { id: 'mercado', label: 'Mercado', icon: 'plus' },
-  { id: 'conselho', label: 'Conselho', icon: 'bell' }, { id: 'ajustes', label: 'Ajustes', icon: 'sliders' },
+  { id: 'conselho', label: 'Avisos', icon: 'bell' }, { id: 'ajustes', label: 'Ajustes', icon: 'sliders' },
 ];
-const TITLES: Record<Panel, string> = { caixa: 'Sua carteira', cenarios: 'Cenários e planejamento', conselho: 'Conselho do Vale', marcos: 'Marcos da startup', ajustes: 'Ajustes', perfil: 'Seu perfil financeiro', fixas: 'Contas fixas', banco: 'Banco / sua reserva', mercado: 'Mercado / alimentação', padaria: 'Padaria / gastos diários' };
+const TITLES: Record<Panel, string> = { caixa: 'Sua carteira', cenarios: 'Cenários e planejamento', conselho: 'Avisos do Vale', marcos: 'Conquistas do seu lar', ajustes: 'Ajustes', perfil: 'Seu perfil financeiro', fixas: 'Contas da casa', banco: 'Banco / sua reserva', mercado: 'Mercado / alimentação', padaria: 'Padaria / gastos diários' };
 const KIND_LABEL = { income: 'Entrada', fixed: 'Saída fixa', daily: 'Gasto diário', save: 'Guardar', withdraw: 'Resgatar' };
 const STORE = 'garagem:personal:v1';
 const valueOf = (form: FormData, name: string) => String(form.get(name) ?? '');
@@ -105,15 +99,11 @@ export default function App() {
   const monthlyFixed = data.bills.reduce((sum, b) => sum + b.amountCents, 0);
   const burn = Math.max(f.burnCents, monthlyFixed + summary.dailyCash);
   const runway = burn > 0 ? Math.max(0, summary.cash) / burn : 0;
-  const stage = stageFor(runway, { taxProvisioned: data.provisioned, monthsInBlack: f.monthsInBlack, proLaboreMonths: f.proLaboreMonths });
-  const stageIdx = STAGES.findIndex(s => s.id === stage);
-  const cur = STAGES[stageIdx] ?? STAGES[0]!;
-  const prevAt = stageIdx > 0 ? (STAGES[stageIdx - 1]?.at ?? 0) : 0;
-  const progress = Math.max(0, Math.min(1, (runway - prevAt) / Math.max(.1, cur.at - prevAt)));
+  const { stage, index: stageIdx, current: cur, progress } = homeJourney(summary.cash, summary.savings, burn);
   const alerts = [...summary.alerts, ...f.alerts];
   const money = (cents: number) => hidden ? 'R$ ••••' : brl(cents);
   const labels: Partial<Record<LabelId, string>> = {
-    garagem: `${cur.name} · sua jornada`, coworking: 'Trabalho e novas ideias', escritorio: 'Seu próximo capítulo', campus: 'Cresça com consistência', torre: 'Grandes conquistas', compliance: 'Planeje suas contas', conselho: `${alerts.length} avisos`, cafe: 'Pequenas pausas',
+    garagem: `${cur.name} · seu lugar no vale`, coworking: 'Planeje seus próximos passos', escritorio: 'Suas conquistas', campus: 'Uma vida em comunidade', torre: 'Novos sonhos', compliance: 'Planeje as contas do mês', conselho: `${alerts.length} avisos`, cafe: 'Uma pausa na rotina',
     banco: !data.profile.savingsGoalCents ? 'Defina sua meta mensal' : summary.goalRemaining > 0 ? 'Sua meta precisa de atenção' : 'Meta do mês concluída', mercado: 'Carteira de alimentação', padaria: 'Registre o dia a dia',
   };
   const onReady = useCallback((handle: ValeHandle | null) => setVale(handle), []);
@@ -128,14 +118,14 @@ export default function App() {
     try {
       const form = new FormData(e.currentTarget);
       const movement: Movement = { id: crypto.randomUUID(), date: valueOf(form, 'date'), description: valueOf(form, 'description'), amountCents: inputCents(form, 'amount'), kind: launch, wallet: source === 'benefit' ? 'food' : wallet, ...(preset.billId ? { billId: preset.billId } : {}), ...(launch === 'income' && source !== 'other' ? { source } : {}) };
-      const next = addMovement(data, movement, asOf); setData(next); setLaunch(null); setToast(`${KIND_LABEL[launch]} registrada. +10 equity`);
+      const next = addMovement(data, movement, asOf); setData(next); setLaunch(null); setToast(`${KIND_LABEL[launch]} registrada. +10 moedas`);
     } catch (error) { setFormError(error instanceof Error ? error.message : 'Não foi possível registrar.'); }
   }
   function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     try {
       const form = new FormData(e.currentTarget);
-      const profile = { name: valueOf(form, 'name').trim() || 'Fundador', salaryCents: inputCents(form, 'salary'), foodCents: inputCents(form, 'food'), savingsGoalCents: inputCents(form, 'goal') };
+      const profile = { name: valueOf(form, 'name').trim() || 'Você', salaryCents: inputCents(form, 'salary'), foodCents: inputCents(form, 'food'), savingsGoalCents: inputCents(form, 'goal') };
       const start = data.demo && form.get('start') === 'on';
       setData({ ...data, profile, ...(start ? { demo: false, movements: [], bills: [], openingCashCents: inputCents(form, 'openingCash'), openingFoodCents: inputCents(form, 'openingFood'), openingSavingsCents: inputCents(form, 'openingSavings') } : {}) });
       setToast(start ? 'Seu perfil está pronto. Registre suas contas fixas para começar.' : 'Perfil salvo. Valores previstos não são creditados automaticamente.');
@@ -162,20 +152,20 @@ export default function App() {
       <button className="level" onClick={() => setPanel('marcos')}><b>Nível {stageIdx + 1}</b><span className="xp"><i style={{ width: `${progress * 100}%` }} /></span><small>{cur.name}</small></button>
       <div className="spacer" /><div className="location"><span className="live-dot" /> SEU VALE <small>Fiordes, montanhas e novos começos</small></div>
       {weather && <div className="chip weather" title="Clima da sua localização">{WEATHER[weather.kind]}{weather.tempC !== null ? ` · ${Math.round(weather.tempC)}°C` : ''}</div>}
-      <div className="chip coins"><span className="coin" />{(data.movements.length * 10 + (data.demo ? 590 : 0)).toLocaleString('pt-BR')}<small>equity</small></div>
-      <button className="icon-btn" aria-label="Conselho" onClick={() => setPanel('conselho')}><Icon name="bell" />{alerts.length > 0 && <em>{alerts.length}</em>}</button>
+      <div className="chip coins"><span className="coin" />{(data.movements.length * 10 + (data.demo ? 590 : 0)).toLocaleString('pt-BR')}<small>moedas</small></div>
+      <button className="icon-btn" aria-label="Avisos" onClick={() => setPanel('conselho')}><Icon name="bell" />{alerts.length > 0 && <em>{alerts.length}</em>}</button>
       <button className="profile" onClick={() => setPanel('perfil')}><Icon name="user" /><span>Perfil</span></button>
     </header>
     <nav className="sidebar glass" aria-label="Menu">{NAV.map(n => <button key={n.id} className={panel === n.id ? 'on' : ''} onClick={() => setPanel(panel === n.id ? null : n.id)}><Icon name={n.icon} /><span>{n.label}</span>{n.id === 'conselho' && alerts.length > 0 && <em>{alerts.length}</em>}</button>)}</nav>
     <section className="balance glass" aria-label="Saldo">
-      <div className="balance-heading"><span>SUA VIDA FINANCEIRA</span><button className="demo-tag" onClick={() => setPanel('perfil')}>{data.demo ? 'Demo · configurar' : data.profile.name}</button></div>
+      <div className="balance-heading"><span>SUA VIDA FINANCEIRA</span><button className="demo-tag" onClick={() => setPanel('perfil')}>{data.demo ? 'Demo · configurar' : data.profile.name === 'Fundador' ? 'Você' : data.profile.name}</button></div>
       <div className="bal-row"><div><small>Dinheiro disponível</small><strong>{money(summary.cash)}</strong></div><div><small>Após fixas pendentes e meta</small><strong className={summary.availableAfterCommitments >= 0 ? 'l-verde' : 'l-vermelho'}>{money(summary.availableAfterCommitments)}</strong></div><button className="icon-btn flat" aria-label={hidden ? 'Mostrar valores' : 'Ocultar valores'} onClick={() => setHidden(!hidden)}><Icon name={hidden ? 'eye' : 'eyeoff'} /></button><button className={`icon-btn flat chev ${open ? 'up' : ''}`} aria-label="Detalhes dos saldos" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="chevron" /></button></div>
       {open && <div className="bal-more"><div><small>Vale-alimentação</small><b>{money(summary.food)}</b></div><div><small>Guardado no banco</small><b>{money(summary.savings)}</b></div><div><small>Saídas fixas pendentes</small><b>{money(summary.pendingFixed)}</b></div></div>}
     </section>
     <section className="journey glass"><div className="journey-icon"><Icon name="flag" /></div><span>SEU BANCO LEMBRA POR VOCÊ</span><h1>Um futuro melhor.<br />Um mês de cada vez.</h1><p>{data.profile.savingsGoalCents ? `Meta mensal: ${money(data.profile.savingsGoalCents)}` : 'Defina quanto quer guardar no seu perfil.'}</p><div className="goal-track"><i style={{ width: `${goalProgress}%` }} /></div><p>{summary.goalRemaining ? `Faltam ${money(summary.goalRemaining)} para a meta.` : 'Meta do mês em dia.'}</p><button onClick={() => setPanel('banco')}>Visitar meu banco <span>↗</span></button></section>
     <div className="map-caption"><span className="live-dot" /> EXPLORE SEU VALE <small>Clique nas casas · Arraste para explorar · Role para aproximar</small></div>
     {panel && <aside className="drawer glass" aria-label={TITLES[panel]}><div className="drawer-head"><h2>{TITLES[panel]}</h2><button className="icon-btn flat" aria-label="Fechar painel" onClick={() => setPanel(null)}><Icon name="close" /></button></div><div className="drawer-body stack">
-      {panel === 'perfil' && <form className="stack" onSubmit={saveProfile} key={String(data.demo)}><p className="muted">Salário e vale são previsões. Registre o recebimento quando o dinheiro entrar. Seus dados ficam neste navegador.</p><label>Como você se chama?<input name="name" defaultValue={data.profile.name} maxLength={50} required /></label><label>Salário mensal líquido (R$)<input name="salary" inputMode="decimal" defaultValue={(data.profile.salaryCents / 100).toFixed(2)} required /></label><label>Vale-alimentação mensal (R$)<input name="food" inputMode="decimal" defaultValue={(data.profile.foodCents / 100).toFixed(2)} required /></label><label>Quanto quer guardar por mês (R$)<input name="goal" inputMode="decimal" defaultValue={(data.profile.savingsGoalCents / 100).toFixed(2)} required /></label>{data.demo && <fieldset><legend>Começar com meus dados</legend><p className="muted">Ao marcar abaixo, os exemplos de contas e lançamentos serão retirados. Informe os saldos que você já tem hoje.</p><label>Saldo em dinheiro (R$)<input name="openingCash" inputMode="decimal" defaultValue="0,00" required /></label><label>Saldo atual do vale (R$)<input name="openingFood" inputMode="decimal" defaultValue="0,00" required /></label><label>Já guardado no banco (R$)<input name="openingSavings" inputMode="decimal" defaultValue="0,00" required /></label><label className="check"><input type="checkbox" name="start" /> Retirar demonstração e usar meus saldos</label></fieldset>}<button className="primary action" type="submit">Salvar perfil</button><button className="text-link" type="button" onClick={() => begin('income', { source: 'salary', description: 'Salário recebido', cents: data.profile.salaryCents })}>Registrar salário já recebido ↗</button></form>}
+      {panel === 'perfil' && <form className="stack" onSubmit={saveProfile} key={String(data.demo)}><p className="muted">Salário e vale são previsões. Registre o recebimento quando o dinheiro entrar. Seus dados ficam neste navegador.</p><label>Como você se chama?<input name="name" defaultValue={data.profile.name === 'Fundador' ? 'Você' : data.profile.name} maxLength={50} required /></label><label>Salário mensal líquido (R$)<input name="salary" inputMode="decimal" defaultValue={(data.profile.salaryCents / 100).toFixed(2)} required /></label><label>Vale-alimentação mensal (R$)<input name="food" inputMode="decimal" defaultValue={(data.profile.foodCents / 100).toFixed(2)} required /></label><label>Quanto quer guardar por mês (R$)<input name="goal" inputMode="decimal" defaultValue={(data.profile.savingsGoalCents / 100).toFixed(2)} required /></label>{data.demo && <fieldset><legend>Começar com meus dados</legend><p className="muted">Ao marcar abaixo, os exemplos de contas e lançamentos serão retirados. Informe os saldos que você já tem hoje.</p><label>Saldo em dinheiro (R$)<input name="openingCash" inputMode="decimal" defaultValue="0,00" required /></label><label>Saldo atual do vale (R$)<input name="openingFood" inputMode="decimal" defaultValue="0,00" required /></label><label>Já guardado no banco (R$)<input name="openingSavings" inputMode="decimal" defaultValue="0,00" required /></label><label className="check"><input type="checkbox" name="start" /> Retirar demonstração e usar meus saldos</label></fieldset>}<button className="primary action" type="submit">Salvar perfil</button><button className="text-link" type="button" onClick={() => begin('income', { source: 'salary', description: 'Salário recebido', cents: data.profile.salaryCents })}>Registrar salário já recebido ↗</button></form>}
       {panel === 'caixa' && <><div className="grid2"><Metric label="Entradas neste mês" value={money(summary.income)} /><Metric label="Fixas pagas" value={money(summary.fixedPaid)} /><Metric label="Gastos diários em dinheiro" value={money(summary.dailyCash)} /><Metric label="Saldo livre após compromissos" value={money(summary.availableAfterCommitments)} /></div><div className="button-row"><button className="primary action" onClick={() => begin('income')}>Nova entrada</button><button className="ghost action" onClick={() => begin('daily')}>Gasto diário</button></div><button className="text-link" onClick={() => setPanel('cenarios')}>Ver cenários e planejamento ↗</button><h3>Seus lançamentos</h3>{ledger(() => true)}</>}
       {panel === 'fixas' && <><p className="muted">Aluguel, luz, água, condomínio, assinaturas. As contas voltam a ficar pendentes a cada mês, sem débito automático.</p><Metric label="Ainda a pagar neste mês" value={money(summary.pendingFixed)} /><div className="bill-list">{data.bills.map(b => { const paid = !summary.unpaidBills.some(u => u.id === b.id); return <div className="bill" key={b.id}><div><b>{b.name}</b><small>Todo dia {b.dueDay} · {money(b.amountCents)}</small></div><button className={paid ? 'paid-tag' : 'text-link'} disabled={paid} onClick={() => begin('fixed', { description: b.name, cents: b.amountCents, billId: b.id })}>{paid ? 'Paga' : 'Pagar'}</button><button className="remove-bill" aria-label={`Remover recorrência de ${b.name}`} title="Retirar das próximas contas; pagamentos anteriores são mantidos" onClick={() => { setData({ ...data, bills: data.bills.filter(x => x.id !== b.id) }); setToast('Recorrência removida. Os pagamentos anteriores foram mantidos.'); }}><Icon name="close" /></button></div>; })}</div><h3>Adicionar conta fixa</h3><form className="stack" onSubmit={addBill}><label>Nome<input name="name" placeholder="Ex.: aluguel" maxLength={80} required /></label><div className="grid2"><label>Valor (R$)<input name="amount" inputMode="decimal" placeholder="0,00" required /></label><label>Dia do vencimento<input name="day" type="number" min="1" max="31" defaultValue="10" required /></label></div><button className="primary action">Adicionar conta</button></form></>}
       {panel === 'banco' && <><div className="place-banner bank-banner"><small>BANCO DO VALE</small><h3>Seu futuro tem endereço.</h3><p>Guarde de verdade no seu controle, sem misturar a reserva com o saldo para gastar.</p></div><div className="grid2"><Metric label="Total guardado" value={money(summary.savings)} /><Metric label="Meta mensal" value={money(data.profile.savingsGoalCents)} /><Metric label="Guardado líquido neste mês" value={money(summary.savedThisMonth)} /><Metric label="Falta guardar" value={money(summary.goalRemaining)} /></div><div className="goal-track"><i style={{ width: `${goalProgress}%` }} /></div>{summary.alerts.map(a => <p key={a.code} className={`notice sev-${a.severity}`}>{a.message}</p>)}<div className="button-row"><button className="primary action" onClick={() => begin('save', { description: 'Reserva mensal', ...(summary.goalRemaining ? { cents: summary.goalRemaining } : {}) })}>Guardar dinheiro</button><button className="ghost action" onClick={() => begin('withdraw', { description: 'Resgate da reserva' })}>Resgatar</button></div><button className="text-link" onClick={() => setPanel('perfil')}>Editar meta no perfil ↗</button><p className="muted">Este banco é seu controle financeiro no jogo. Os registros não movimentam sua conta bancária real.</p>{ledger(m => m.kind === 'save' || m.kind === 'withdraw')}</>}

@@ -2,7 +2,7 @@
 
 ## Direção atual
 
-Vale costeiro original inspirado na Noruega e nas Ilhas Faroe. Casinhas de madeira, telhados verdes e terrosos, caminhos claros, encostas suaves, vegetação variada e água azul-esverdeada. O prompt antigo de Silicon Valley foi adaptado a esta direção; a vila não foi substituída por uma cidade californiana.
+Vila residencial costeira original inspirada na Noruega e nas Ilhas Faroe. O centro da experiência é uma casa comum e a vida pessoal. Os modelos medievais foram substituídos por casas do City Kit Suburban 2.0: paredes claras, telhados simples, garagens, sobrados e janelas maiores. Oito residências adicionais, quintais cercados, praça e fachadas com toldos completam o bairro. A câmera ficou mais próxima e baixa para mostrar as fachadas; rótulos secundários aparecem ao aproximar.
 
 ## Acabamento
 
@@ -15,7 +15,7 @@ Vale costeiro original inspirado na Noruega e nas Ilhas Faroe. Casinhas de madei
 
 ## Progressão
 
-Os 11 destinos financeiros continuam com os mesmos IDs. Lotes ainda não liberados mostram tapumes, materiais e rótulo de obra. O QG conserva a casa original e recebe anexos no mesmo terreno nos estágios 3 e 5. As outras liberações mantêm a distribuição da vila. O maior estágio visual fica salvo em `garagem:vale:unlocked:v1`; oscilações do caixa não apagam conquistas. O estágio financeiro do HUD continua refletindo o motor atual.
+Os 11 destinos financeiros continuam com os mesmos IDs internos, sem expor a linguagem antiga de startup. A vizinhança já está ocupada no começo. A casa do usuário recebe ampliações nos níveis 3 e 5; a maior conquista visual fica salva em `garagem:vale:unlocked:v1`. O nível exibido é calculado em `src/homeJourney.ts`: dinheiro + reserva, dividido pela estimativa mensal de despesas. Os marcos de 1, 3, 6 e 12 meses liberam Novo lar, Lar acolhedor, Casa com jardim, Lar completo e Vida tranquila. Essa apresentação não exige imposto provisionado ou pró-labore e não altera os saldos nem os cálculos do motor.
 
 ## Desempenho
 
@@ -29,7 +29,7 @@ Meta: 60 fps em desktop, sem garantia por GPU. O limite antigo de 30 fps foi rem
 
 Os limites de pixels reduzem a resolução interna em monitores maiores. A preferência por movimento reduzido mantém a cena e pausa suas animações. Moradores usam instâncias e poses a 15 Hz; o vento e a água são animados por shader.
 
-Orçamento de geometria: menos de 250 mil triângulos e 80 malhas, incluindo todos os estágios e obras. Medição CPU atual: **237.564 triângulos, 78 malhas**, modelos GLB somando **1.746.392 bytes**, mais **1.475.077 bytes** do HDRI. Malhas não equivalem a draw calls; sombras e pós-processamento acrescentam chamadas.
+Orçamento de geometria: menos de 250 mil triângulos e 80 malhas, incluindo ampliações da casa. Medição CPU atual: **205.557 triângulos, 65 malhas**, modelos GLB somando **710.904 bytes**, mais **1.475.077 bytes** do HDRI. Caminhos e casas decorativas são agrupados por superfície. Malhas não equivalem a draw calls; sombras e pós-processamento acrescentam chamadas.
 
 Meta de chamadas: até 140 por quadro estável no nível alto; quadros que recalculam sombras podem exceder essa meta. A instrumentação grava `data-fps`, `data-draw-calls`, `data-triangles` e `data-quality` no canvas depois do aquecimento. São observações do navegador em uso, não um benchmark de laboratório. FPS de GPU integrada e chamadas reais **ainda não foram medidos nesta entrega**.
 
@@ -39,7 +39,7 @@ O proprietário manteve a validação visual e pediu para não abrir o navegador
 
 Ficaram de fora nesta adaptação:
 
-- Draco/meshopt/KTX2: os modelos locais já somam aproximadamente 1,75 MB e não usam grandes mapas de textura. Não foi adicionado o custo de decodificadores sem medição que justificasse isso.
+- Draco/meshopt/KTX2: os modelos locais somam aproximadamente 0,71 MB, com cores do atlas incorporadas nos vértices das casas. Não foi adicionado o custo de decodificadores sem medição que justificasse isso.
 - SSAO/N8AO, névoa volumétrica e profundidade de campo física: usados contato pré-calculado, neblina da cena e miniatura leve para controlar passes e preservar legibilidade.
 - Asfalto, ônibus, palmeiras e torre de vidro: pertenciam à direção californiana do prompt antigo. A vila nórdica mantém pedestres, vegetação local e barcos.
-- Novos packs de prédios: os GLBs CC0 atuais foram reutilizados; esta etapa melhora iluminação, progressão e acabamento, sem substituir silenciosamente a direção arquitetônica.
+- Prédios corporativos e arquitetura medieval: a direção atual é residencial. Os IDs antigos do motor e do mapa permanecem internos para manter compatibilidade, sem definir a linguagem do produto.

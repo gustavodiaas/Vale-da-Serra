@@ -29,14 +29,14 @@ export function createFjordWater() {
       float depth = max(0.0,-.25-bottom);
       vec3 shallow = vec3(.20,.47,.45);
       vec3 deep = vec3(.055,.23,.29);
-      float ripple = sin(vFjord.x*1.8+vFjord.z*.6+fjordTime)*sin(vFjord.z*1.4-fjordTime*.7);
+      float ripple = sin(vFjord.x*.78+vFjord.z*.24+fjordTime*.7+sin(vFjord.z*.08)*.45)*.55+sin(vFjord.x*.21+vFjord.z*.93-fjordTime*.43+sin(vFjord.x*.13))*.25;
       float foam = (1.0-smoothstep(.2,1.45,depth))*smoothstep(.15,.8,sin(depth*8.0-fjordTime*1.25+ripple*.5));
       diffuseColor.rgb = mix(shallow,deep,smoothstep(.4,7.0,depth));
-      diffuseColor.rgb += ripple*.008;
+      diffuseColor.rgb += ripple*.0035;
       diffuseColor.rgb = mix(diffuseColor.rgb,vec3(.72,.84,.75),foam*.48);
     `);
   };
-  material.customProgramCacheKey = () => 'fjord-depth-ripples-v1';
+  material.customProgramCacheKey = () => 'fjord-depth-ripples-v2';
   const geometry = new THREE.PlaneGeometry(440, 440, 48, 48); geometry.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(geometry, material); mesh.position.y = -.25; mesh.name = 'fjord-water';
   return { mesh, update(seconds: number) { time.value = seconds; } };

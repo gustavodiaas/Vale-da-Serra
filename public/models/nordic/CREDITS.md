@@ -2,14 +2,23 @@
 
 The environment is an original, Nordic-inspired composition, not a geographic reconstruction of Norway or the Faroe Islands.
 
-## Buildings and furniture
+## Residential buildings
+
+Artist: **Kenney**. Pack: **City Kit Suburban 2.0**, distributed under **CC0**.
+
+- Source: https://kenney.nl/assets/city-kit-suburban
+- `house-a.glb`: building-type-a; `house-b.glb`: building-type-b; `house-c.glb`: building-type-e; `lodge.glb`: building-type-m; `market.glb`: building-type-t.
+- Adapted using `scripts/prepare-residential.mjs`: palette colors baked into vertices, texture atlas removed, geometry grouped by surface for walls, roofs and emissive windows. Runtime colors are adapted to the village.
+- Original license: `KENNEY-RESIDENTIAL-LICENSE.txt`.
+- These replace the earlier medieval houses. They are artist-created residential models.
+
+## Park bench
 
 Artist: **Quaternius**. Pack: **Medieval Village Pack**, distributed under **CC0**.
 
 - Collection: https://poly.pizza/bundle/Medieval-Village-Pack-NsHhjhlrfY
 - Artist's release: https://www.patreon.com/quaternius/posts/medieval-village-45532344
-- `house-a.glb`, `house-b.glb`, `house-c.glb`, `lodge.glb`, `market.glb`, `bench.glb` were obtained as GLB files from this collection.
-- Material colors are adapted at runtime to the valley palette. Geometry is artist-created; the application does not generate these houses from primitives.
+- Only `bench.glb` remains from this collection.
 
 ## Coastal rocks and grass
 

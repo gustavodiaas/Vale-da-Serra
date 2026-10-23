@@ -4,7 +4,7 @@ const gaussian = (x: number, z: number, cx: number, cz: number, sx: number, sz: 
 const smooth = (a: number, b: number, value: number) => { const t = Math.min(1, Math.max(0, (value - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 export const VILLAGE_LAYOUT = { shoreZ: 53, bankX: 64, eastBankX: 125, centerX: -8, centerZ: -10, halfWidth: 55, halfDepth: 58 };
-export const NORDIC_VIEW = { azimuth: 1.48, polar: .98, radius: 174, target: [0, 7, -6] as const };
+export const NORDIC_VIEW = { azimuth: 1.48, polar: 1.08, radius: 160, target: [0, 7, -6] as const };
 export const villagePosition = (x: number, z: number): [number, number] => [x * 1.35, z * 1.3];
 export const shoreAt = (x: number) => VILLAGE_LAYOUT.shoreZ + Math.sin(x * .035) * 7 + Math.sin(x * .071) * 1.3;
 export const bankAt = (z: number) => VILLAGE_LAYOUT.bankX + Math.sin(z * .027) * 7 + Math.sin(z * .059) * 2;

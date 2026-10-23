@@ -9,21 +9,22 @@ import { createFjordBoats } from './fjordBoats';
 import { createVillageResidents, type VillageVisit } from './villageResidents';
 import { createConstructionSite } from './villageConstruction';
 import { addVegetationWind } from './vegetationWind';
+import { createResidentialStreets } from './residentialStreets';
 
-type House = 'house-a' | 'house-b' | 'house-c' | 'lodge';
+type House = 'house-a' | 'house-b' | 'house-c' | 'lodge' | 'market';
 type Plot = { id: CityAnchor['id']; name: string; x: number; z: number; model: House; width: number; color: string; min: number; turn?: number };
 const PLOTS: Plot[] = [
-  { id: 'garagem', name: 'Sua startup', x: -2, z: -9, model: 'house-b', width: 11, color: '#954940', min: 1 },
-  { id: 'coworking', name: 'Casa das Ideias', x: -25, z: -27, model: 'house-c', width: 12, color: '#c9c2a6', min: 2 },
-  { id: 'escritorio', name: 'Escritório', x: -2, z: -43, model: 'house-b', width: 11, color: '#748675', min: 3 },
-  { id: 'campus', name: 'Campus do Vale', x: -25, z: -46, model: 'lodge', width: 14, color: '#b7a77e', min: 4 },
-  { id: 'torre', name: 'Sede do Vale', x: 21, z: -43, model: 'lodge', width: 14, color: '#aa5143', min: 5 },
-  { id: 'compliance', name: 'Contas fixas', x: -26, z: -8, model: 'house-b', width: 10, color: '#d1cdb9', min: 1 },
-  { id: 'conselho', name: 'Conselho', x: 23, z: -24, model: 'house-a', width: 10, color: '#5e777d', min: 1 },
-  { id: 'cafe', name: 'Café do Fiorde', x: 24, z: 18, model: 'house-a', width: 9, color: '#a05242', min: 1 },
-  { id: 'banco', name: 'Banco do Vale', x: -25, z: 16, model: 'lodge', width: 12, color: '#d3c7a6', min: 1 },
-  { id: 'mercado', name: 'Mercado do Porto', x: 22, z: -6, model: 'house-c', width: 12, color: '#536e64', min: 1 },
-  { id: 'padaria', name: 'Padaria do Vale', x: -2, z: 17, model: 'house-b', width: 10, color: '#be7856', min: 1 },
+  { id: 'garagem', name: 'Sua casa', x: -2, z: -9, model: 'house-c', width: 14, color: '#e6ddc9', min: 1 },
+  { id: 'coworking', name: 'Casa dos Planos', x: -25, z: -27, model: 'house-b', width: 12, color: '#c4d0ca', min: 1 },
+  { id: 'escritorio', name: 'Casa do Jardim', x: -2, z: -43, model: 'house-a', width: 11, color: '#e6cdbb', min: 1 },
+  { id: 'campus', name: 'Casa da Comunidade', x: -25, z: -46, model: 'lodge', width: 13, color: '#e8e1cd', min: 1 },
+  { id: 'torre', name: 'Casa do Mirante', x: 21, z: -43, model: 'house-c', width: 13, color: '#c2d0d3', min: 1 },
+  { id: 'compliance', name: 'Contas da casa', x: -26, z: -8, model: 'house-b', width: 11, color: '#eee5d4', min: 1 },
+  { id: 'conselho', name: 'Central de avisos', x: 23, z: -24, model: 'house-a', width: 10, color: '#b8cbcd', min: 1 },
+  { id: 'cafe', name: 'Café da Praça', x: 24, z: 18, model: 'house-a', width: 11, color: '#d8b298', min: 1 },
+  { id: 'banco', name: 'Banco do Vale', x: -25, z: 16, model: 'lodge', width: 13, color: '#e9dfc7', min: 1 },
+  { id: 'mercado', name: 'Mercado da Vila', x: 22, z: -6, model: 'market', width: 14, color: '#bacbb7', min: 1 },
+  { id: 'padaria', name: 'Padaria da Praça', x: -2, z: 17, model: 'house-a', width: 11, color: '#e5c5aa', min: 1 },
 ];
 for (const plot of PLOTS) [plot.x, plot.z] = villagePosition(plot.x, plot.z);
 export const NORDIC_ANCHORS: CityAnchor[] = PLOTS.map(p => ({ id: p.id, name: p.name, position: [p.x, heightAt(p.x, p.z) + 11, p.z], min: p.min }));
@@ -41,6 +42,7 @@ export function bakeModel(source: THREE.Object3D, wall?: string, part: 'body' | 
     const geometry = obj.geometry.index ? obj.geometry.toNonIndexed() : obj.geometry.clone();
     geometry.applyMatrix4(obj.matrixWorld);
     const positions = geometry.getAttribute('position');
+    const originalColors = geometry.getAttribute('color');
     const colors = new Float32Array(positions.count * 3);
     const materials: THREE.Material[] = Array.isArray(obj.material) ? obj.material : [obj.material];
     const groups = geometry.groups.length ? geometry.groups : [{ start: 0, count: positions.count, materialIndex: 0 }];
@@ -48,13 +50,17 @@ export function bakeModel(source: THREE.Object3D, wall?: string, part: 'body' | 
       const material = materials[group.materialIndex ?? 0] as THREE.MeshStandardMaterial;
       const name = material.name.toLowerCase();
       const color = material.color.clone();
-      if (wall && /plaster|beige|wood_side/.test(name)) color.set(wall);
+      const recolor = !!wall && /plaster|beige|wood_side|^walls$|^roof$/.test(name);
+      if (wall && /plaster|beige|wood_side|^walls$/.test(name)) color.set(wall);
+      if (wall && name === 'roof') color.set(wall === '#e6cdbb' || wall === '#d8b298' ? '#947760' : '#657777');
       if (wall && /rooftiles/.test(name)) color.set(wall === '#d1cdb9' || wall === '#c9c2a6' ? '#9b6250' : wall === '#536e64' ? '#555e65' : '#58654b');
       if (wall && name === 'wood') color.set('#795944');
       if (wall && name === 'wood_light') color.set('#e3cfa6');
       if (name.includes('windows')) color.set('#ffe0a5');
       for (let i = group.start; i < Math.min(positions.count, group.start + group.count); i++) {
-        colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
+        colors[i * 3] = !recolor && originalColors ? originalColors.getX(i) * color.r : color.r;
+        colors[i * 3 + 1] = !recolor && originalColors ? originalColors.getY(i) * color.g : color.g;
+        colors[i * 3 + 2] = !recolor && originalColors ? originalColors.getZ(i) * color.b : color.b;
       }
     }
     for (const key of Object.keys(geometry.attributes)) if (!['position', 'normal'].includes(key)) geometry.deleteAttribute(key);
@@ -94,6 +100,8 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
 
   // Narrow paths follow the terrain instead of covering the valley with city blocks.
   const pathMaterial = new THREE.MeshStandardMaterial({ color: '#a8a48c', roughness: 1 });
+  const pathGeometries: THREE.BufferGeometry[] = [];
+  const paths = new THREE.Mesh(new THREE.BufferGeometry(), pathMaterial); paths.receiveShadow = true; paths.name = 'village-connected-paths'; root.add(paths);
   function path(points: [number, number][], width: number) {
     const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)));
     const vertices: number[] = [], indices: number[] = [];
@@ -104,7 +112,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
       if (i < segments) { const a = i * 2; indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     }
     const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geometry.setIndex(indices); geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, pathMaterial); mesh.receiveShadow = true; root.add(mesh);
+    pathGeometries.push(geometry);
   }
   path([[13.5, -91], [13.5, -48], [13.5, -8], [13.5, 28], [13.5, 52]], 3.2);
   const wood = new THREE.MeshStandardMaterial({ color: '#7d6650', roughness: .9 });
@@ -127,7 +135,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     const sources = new Map<string, THREE.Group>();
     results.forEach((r, i) => { if (r.status === 'fulfilled') sources.set(names[i]!, r.value.scene); });
     const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .88 });
-    const glow = new THREE.MeshStandardMaterial({ color: '#ffe0a5', emissive: '#ffbb68', emissiveIntensity: .18, roughness: .45 }); windows.push(glow);
+    const glow = new THREE.MeshStandardMaterial({ color: '#9fbac1', emissive: '#ffbb68', emissiveIntensity: .18, roughness: .28, metalness: .12 }); windows.push(glow);
     const geometries = new Map<string, THREE.BufferGeometry>();
     function model(name: string, width: number, color?: string) {
       const key = `${name}:${color ?? ''}`;
@@ -137,7 +145,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
       const mesh = new THREE.Mesh(geometry, surface);
       const scale = width / Math.max(.01, geometry.boundingBox!.max.x - geometry.boundingBox!.min.x);
       mesh.castShadow = mesh.receiveShadow = true;
-      const group = new THREE.Group(); group.add(mesh); group.scale.set(scale, scale * (color ? .88 : 1), scale);
+      const group = new THREE.Group(); group.add(mesh); group.scale.setScalar(scale);
       if (color) {
         const windowKey = `${name}:windows`;
         let panes = geometries.get(windowKey);
@@ -149,6 +157,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     try {
       const gardens: { x: number; front: number; width: number }[] = [];
       const visits: VillageVisit[] = [];
+      const shops: { x: number; front: number; width: number; kind: string }[] = [];
       const footprints: { x: number; z: number; width: number; depth: number }[] = [];
       for (const [i, plot] of PLOTS.entries()) {
         const mesh = model(plot.model, plot.width, plot.color);
@@ -160,7 +169,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         }
         if (plot.id === 'garagem') {
           for (const [name, width, x, z, min] of [['house-b', 6.5, -9, -1, 3], ['house-c', 7.2, -9, -11, 5]] as const) {
-            const annex = model(name, width, '#c9c2a6'); annex.position.set(x, 0, z); annex.name = `headquarters-annex-${min}`;
+            const annex = model(name, width, '#e6ddc9'); annex.position.set(x, 0, z); annex.name = `home-extension-${min}`;
             group.add(annex); headquarters.push({ group: annex, min });
           }
         }
@@ -172,19 +181,42 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         if (plot.min === 1) gardens.push({ x: plot.x, front: box.max.z + .75, width: plot.width });
         if (plot.min === 1) visits.push({ x: plot.x, front, door: box.max.z - .2, kind: plot.id });
         if (plot.min === 1) footprints.push({ x: plot.x, z: plot.z, width: plot.width + 2, depth: box.max.z - box.min.z + 2 });
+        if (['mercado', 'padaria', 'cafe'].includes(plot.id)) shops.push({ x: plot.x, front: box.max.z, width: plot.width, kind: plot.id });
       }
       // A few waterfront homes make the shore inhabited without a huge city.
       for (const [i, x] of [-43, -25, -7].entries()) {
-        const house = model('house-b', 8, ['#954940', '#c9c2a6', '#657c72'][i]);
+        const house = model(i === 1 ? 'house-a' : 'house-b', 9, ['#c8d2cd', '#e7ccb9', '#d7dfd2'][i]);
         house.position.set(x, heightAt(x, 41), 41); root.add(house);
         const box = new THREE.Box3().setFromObject(house);
         gardens.push({ x, front: box.max.z + .75, width: 8 });
         footprints.push({ x, z: 41, width: 10, depth: box.max.z - box.min.z + 2 });
       }
-      path([[-48, 48], [-24, 48], [-4, 48], [13.5, 48], [37, 47]], 2.1);
-      for (const [x, z] of [[43, 1], [43, 8]]) { const stall = model('market', 4); stall.position.set(x!, heightAt(x!, z!), z!); root.add(stall); }
+      path([[-48, 48], [-24, 48], [-4, 48], [13.5, 48], [43, 47], [53, 43]], 2.1);
+      const neighborhood = new THREE.Group();
+      for (const [i, [x, z]] of [[-55, -53], [-55, -31], [-56, -5], [-53, 20], [-8, -68], [45, -48], [48, -23], [48, 12]].entries()) {
+        const house = model(['house-a', 'house-b', 'lodge'][i % 3]!, 8.5 + i % 2, ['#e7dcc6', '#c1d1cc', '#d7bdab', '#c3cfd1'][i % 4]);
+        house.position.set(x!, heightAt(x!, z!), z!); neighborhood.add(house);
+        const box = new THREE.Box3().setFromObject(house);
+        path([[x!, box.max.z + .2], [x!, box.max.z + 2], [x! < 0 ? -44 : 43, box.max.z + 2]], 1.25);
+        footprints.push({ x: x!, z: z!, width: 10, depth: box.max.z - box.min.z + 1 });
+      }
+      for (const x of [-20, -12]) { const bench = model('bench', 2.6); bench.position.set(x, 1.8, 11); neighborhood.add(bench); }
+      neighborhood.updateMatrixWorld(true);
+      const batches = new Map<THREE.Material, THREE.BufferGeometry[]>();
+      neighborhood.traverse(obj => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        const material = obj.material as THREE.Material;
+        if (!batches.has(material)) batches.set(material, []);
+        batches.get(material)!.push(obj.geometry.clone().applyMatrix4(obj.matrixWorld));
+      });
+      for (const [material, parts] of batches) { const mesh = new THREE.Mesh(mergeGeometries(parts)!, material); mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'residential-neighborhood'; root.add(mesh); parts.forEach(part => part.dispose()); }
+      path([[-44, -60], [-44, -27], [-44, 10], [-44, 48]], 1.8);
+      path([[43, -55], [43, -21], [43, 11], [43, 47]], 1.8);
+      path([[-28, 5], [-23, 8.5], [-17, 10], [-11, 8.5], [-3, 5], [13.5, 5]], 1.8);
+      paths.geometry.dispose(); paths.geometry = mergeGeometries(pathGeometries)!; pathGeometries.forEach(geometry => geometry.dispose()); pathGeometries.length = 0;
       for (const [x, z] of [[-17, 13], [7, 34], [24, 39], [-47, 8], [43, 19]]) { const bench = model('bench', 2.4); bench.position.set(x!, heightAt(x!, z!), z!); root.add(bench); }
       createCottageGardens(root, gardens, glow);
+      createResidentialStreets(root, footprints, shops);
       const pixels = new Uint8Array(64 * 64 * 4);
       for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
         const i = (y * 64 + x) * 4, radius = Math.hypot((x - 31.5) / 32, (y - 31.5) / 32);
@@ -197,7 +229,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
       footprints.forEach((footprint, i) => { contact.position.set(footprint.x, heightAt(footprint.x, footprint.z) + .035, footprint.z); contact.scale.set(footprint.width * 1.4, 1, footprint.depth * 1.4); contact.updateMatrix(); contacts.setMatrixAt(i, contact.matrix); });
       contacts.name = 'cottage-contact-shadows'; root.add(contacts);
       residents = createVillageResidents(root, visits);
-      const trees = [[-55, -57], [-59, -39], [-54, -18], [-60, 3], [-55, 25], [-49, 37], [-38, -73], [-14, -76], [37, -68], [45, 27]];
+      const trees = [[-60, -60], [-61, -40], [-56, -18], [-62, 8], [-59, 28], [-49, 37], [-38, -73], [-19, -73], [37, -68], [48, 31], [-22, 4], [-12, 7], [-51, -44], [-52, -20], [46, -35], [46, -7], [9, 32], [-29, 34], [-36, 8], [-16, -25]];
       const treeSource = sources.get('tree')!; treeSource.updateMatrixWorld(true);
       treeSource.traverse(obj => {
         if (!(obj instanceof THREE.Mesh)) return;
@@ -250,5 +282,5 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     for (const site of constructionSites) site.group.visible = stage < site.min;
     for (const annex of headquarters) annex.group.visible = stage >= annex.min;
   }
-  return { buildings, windows, ready, update, setStage, constructionSites, boats, get residents() { return residents; }, cancel() { cancelled = true; } };
+  return { buildings, windows, ready, update, setStage, constructionSites, boats, get residents() { return residents; }, cancel() { cancelled = true; pathGeometries.forEach(geometry => geometry.dispose()); pathGeometries.length = 0; } };
 }

@@ -1,23 +1,25 @@
 # Garagem: passagem de bastão
 
-Nome provisório (exige busca de marca no INPI). Finanças gamificadas para MEI e autônomo com renda irregular. **Produto para computador (desktop first)**, no estilo do moneyville.app, mas com conceito, nome, texto e arte 100% originais. Nunca copiar assets, frases ou personagens deles nem de empresas reais.
+Nome provisório. Finanças pessoais gamificadas em uma vila residencial. **Produto para computador (desktop first)**, com conceito, texto e arte originais. Usar apenas assets com licença compatível e fonte documentada.
 
 ## Conceito
-O usuário é fundador de uma startup em um vale costeiro original inspirado na Noruega e nas Ilhas Faroe. A direção californiana foi substituída por uma vila cozy, com casas de madeira, fiorde, encostas, moradores e barcos. A progressão conserva a garagem original, acrescenta anexos ao QG e libera destinos na vila. Vocabulário: runway = fôlego do caixa, burn = custo mensal, pró-labore = salário do fundador, imposto = compliance provisionado, metas = marcos, alertas = Conselho, moedas = equity. Tom brasileiro.
+O usuário é morador de uma casa comum em um vale costeiro inspirado na Noruega e nas Ilhas Faroe. A orientação mais recente é uma vila residencial acolhedora, com casas de bairro, garagens, sobrados, quintais e janelas grandes. A arquitetura medieval e as cabanas foram substituídas pelo Kenney City Kit Suburban 2.0. A progressão amplia a própria casa. Vocabulário visível: casa, lar, reserva, contas da casa, conquistas, avisos e moedas. Não apresentar a pessoa como fundador nem usar pré-seed, campus, sede ou equity na interface.
 
 ## Diferencial
-O motor financeiro, não a skin: fôlego do caixa, previsão em 3 cenários (mês ruim, provável, bom), pró-labore sugerido, separação PF e PJ, imposto separado a cada entrada. A gamificação serve ao motor.
+Entradas, contas fixas, gastos diários, vale-alimentação separado, salário previsto, meta mensal de economia e reserva. A casa e a vila acompanham a organização financeira, com moradores caminhando, barcos e comércio local.
 
-## Estágios (regra em `src/engine/engine.ts`, função `stageFor`)
-- Garagem: fôlego abaixo de 1 mês
-- Pré-seed: 1 a 2 meses
-- Seed: 3 meses e imposto separado
-- Série A: 6 meses e 3 meses seguidos no azul
-- Unicórnio: 12 meses e pró-labore por 6 meses seguidos
+## Níveis da casa (`src/homeJourney.ts`)
+- Novo lar: cobertura abaixo de 1 mês
+- Lar acolhedor: pelo menos 1 mês
+- Casa com jardim: pelo menos 3 meses
+- Lar completo: pelo menos 6 meses
+- Vida tranquila: pelo menos 12 meses
+
+A cobertura considera dinheiro + reserva dividido pela estimativa de despesas mensais. Os nomes antigos de estágio permanecem como IDs internos para compatibilidade. O motor original, incluindo `stageFor`, não foi alterado, mas a apresentação residencial não depende dos critérios antigos de imposto e pró-labore.
 
 O prédio e as conquistas nunca se perdem. O selo atual reflete o caixa de hoje.
 
-## Planos (hipóteses)
+## Planos antigos (hipóteses históricas, não implementados)
 Garagem grátis permanente (decidido), Startup R$ 24,90/mês, Scale R$ 44,90/mês. Startup: PF e PJ, 3 cenários, imposto provisionado, metas, cartões. Scale: IA para comprovantes, contador ou sócio convidado, relatórios.
 
 ## Stack
@@ -30,7 +32,8 @@ Vite + React + TypeScript (sem SSR), Supabase (Postgres, Auth por código no e-m
 - `src/vale`: cena Three.js com modelos GLB CC0 locais, HDRI CC0, PBR, água com shader, pedestres e barcos. `createVale.ts` controla câmera, clima, progressão e renderização; `Vale.tsx` liga ao motor. Carregada com lazy import.
 - API pública preservada: `setStage`, `setWeather`, `setLabel`, `zoom`, `reset`, `dispose`. Acrescentadas opções de qualidade e horário da cena. O prompt antigo citava nomes que não existem nesta versão; não renomear métodos usados pelo app.
 - Pós-processamento escalável em `valeFinish.ts`; alvo desktop de 60 fps e níveis automáticos em `desktopQuality.ts`. Sem promessa de FPS medido.
-- Lotes bloqueados aparecem em obras. O maior estágio visual é salvo em `garagem:vale:unlocked:v1`; conquistas não regridem com o caixa. Os cálculos e o estágio financeiro continuam no motor original.
+- Os estabelecimentos e as casas vizinhas estão presentes desde o começo. A casa principal recebe ampliações nos níveis 3 e 5. O maior estágio visual continua salvo em `garagem:vale:unlocked:v1`; oscilações financeiras não apagam a casa já conquistada.
+- Modelos residenciais adaptados por `scripts/prepare-residential.mjs`, com cores do atlas convertidas em vértices. Correspondência de tipos e licenças em `CREDITS.md`. Casas decorativas e caminhos são agrupados para controlar chamadas de desenho.
 - `src/App.tsx`: HUD financeiro em português, sobre o vale. O controle "Visual do vale" permite comparar qualidade e dia/noite sem afetar finanças ou clima real do cabeçalho.
 - Fontes e licenças em `CREDITS.md`. Direção, orçamento, critérios automáticos e limites em `docs/visual-quality.md`.
 - `docs/vale-preview-standalone.html`: a primeira versão da cena em HTML único (three r128), só como referência.
