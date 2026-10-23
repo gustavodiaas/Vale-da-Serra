@@ -20,7 +20,7 @@ export interface ValeHandle {
 }
 
 /** Vale com terreno contínuo e modelos GLB ligados ao estágio financeiro. */
-export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void, onAssets?: (status: 'ready' | 'error') => void): ValeHandle | null {
+export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, initial: ValeStage = 1, onSelect?: (id: LabelId) => void, onAssets?: (status: 'ready' | 'error') => void, onProgress?: (percent: number) => void): ValeHandle | null {
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -39,8 +39,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const scene = new THREE.Scene();
-  const city = buildNordicVale(scene);
   let disposed = false;
+  const city = buildNordicVale(scene, undefined, (loaded, total) => { if (!disposed) onProgress?.(Math.round(loaded / total * 100)); });
   let assetsReady = false;
   const environmentScene = new RoomEnvironment();
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -118,7 +118,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     const info = document.createElement('span');
     el.append(name, info);
     overlay.appendChild(el);
-    return { def, el, info, pos: new THREE.Vector3(...def.position) };
+    return { def, el, info, text: '', pos: new THREE.Vector3(...def.position) };
   });
 
   // câmera: ângulo fixo estilo mapa, arrastar para mover, roda para zoom
@@ -175,6 +175,8 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
   let stage: number = initial;
+  const progressKey = 'garagem:vale:unlocked:v1';
+  try { const saved = Number(localStorage.getItem(progressKey)); if (Number.isInteger(saved) && saved >= 1 && saved <= 5) stage = Math.max(initial, saved); } catch { /* Scene still works when storage is unavailable. */ }
   let w = 1;
   let h = 1;
   const resize = () => {
@@ -231,6 +233,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
   void city.ready.then(() => {
     if (disposed) return;
     assetsReady = true;
+    city.setStage(stage);
     for (const label of labels) label.pos.set(...label.def.position);
     labelStage = -1;
     renderer.shadowMap.needsUpdate = true;
@@ -278,7 +281,10 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     labelX = tgt.x; labelZ = tgt.z; labelRad = rad; labelStage = stage; labelWidth = w; labelHeight = h;
     for (const l of labels) {
       v3.copy(l.pos).project(cam);
-      const show = assetsReady && stage >= l.def.min && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
+      const locked = stage < l.def.min;
+      l.el.classList.toggle('is-locked', locked); l.el.disabled = locked;
+      l.info.textContent = locked ? `Em obras · Nível ${l.def.min}` : l.text;
+      const show = assetsReady && v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
       l.el.style.visibility = show ? 'visible' : 'hidden';
       if (show) l.el.style.transform = `translate(${((v3.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-v3.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%, -100%)`;
     }
@@ -287,7 +293,9 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
 
   return {
     setStage(n) {
-      stage = n;
+      stage = Math.max(stage, n);
+      try { localStorage.setItem(progressKey, String(stage)); } catch { /* Persistence is optional. */ }
+      city.setStage(stage);
       renderer.shadowMap.needsUpdate = true;
     },
     setWeather(wt) {
@@ -297,7 +305,7 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     },
     setLabel(id, text) {
       const l = labels.find((x) => x.def.id === id);
-      if (l) l.info.textContent = text;
+      if (l) { l.text = text; if (stage >= l.def.min) l.info.textContent = text; }
     },
     zoom(f) {
       radT = clampRad(radT * f);

@@ -7,6 +7,7 @@ import { createCottageGardens } from './cottageGardens';
 import { createFjordWater } from './fjordWater';
 import { createFjordBoats } from './fjordBoats';
 import { createVillageResidents, type VillageVisit } from './villageResidents';
+import { createConstructionSite } from './villageConstruction';
 
 type House = 'house-a' | 'house-b' | 'house-c' | 'lodge';
 type Plot = { id: CityAnchor['id']; name: string; x: number; z: number; model: House; width: number; color: string; min: number; turn?: number };
@@ -76,11 +77,13 @@ function releaseSource(source: THREE.Object3D) {
 }
 
 /** Compact Nordic pilot. Local GLBs are loaded once; repeated props share geometry. */
-export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promise<{ scene: THREE.Group }> => new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/nordic/${name}.glb`)) {
+export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promise<{ scene: THREE.Group }> => new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/nordic/${name}.glb`), onProgress?: (loaded: number, total: number) => void) {
   const root = new THREE.Group(); root.name = 'nordic-valley'; scene.add(root);
   root.add(createNordicTerrain());
   const buildings: CityBuilding[] = [];
   const windows: THREE.MeshStandardMaterial[] = [];
+  const constructionSites: { group: THREE.Group; min: number }[] = [];
+  const headquarters: { group: THREE.Group; min: number }[] = [];
   let cancelled = false;
   const water = createFjordWater(); root.add(water.mesh);
   const boats = createFjordBoats(root);
@@ -112,7 +115,8 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
 
   const ready = (async () => {
     const names = ['house-a', 'house-b', 'house-c', 'lodge', 'market', 'bench', 'rock-a', 'rock-b', 'grass-large', 'tree'] as const;
-    const results = await Promise.allSettled(names.map(name => load(name)));
+    let loaded = 0; onProgress?.(0, names.length);
+    const results = await Promise.allSettled(names.map(async name => { try { return await load(name); } finally { onProgress?.(++loaded, names.length); } }));
     if (cancelled || results.some(r => r.status === 'rejected')) {
       for (const result of results) if (result.status === 'fulfilled') releaseSource(result.value.scene);
       if (!cancelled) throw new Error('Não foi possível carregar as casas do Vale.');
@@ -148,6 +152,16 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         const mesh = model(plot.model, plot.width, plot.color);
         const group = new THREE.Group(); group.name = plot.id;
         group.position.set(plot.x, heightAt(plot.x, plot.z), plot.z); group.rotation.y = plot.turn ?? 0; group.add(mesh); root.add(group);
+        if (plot.min > 1) {
+          const work = createConstructionSite(plot.width + 2, 12); work.position.copy(group.position); work.name = `worksite-${plot.id}`;
+          root.add(work); constructionSites.push({ group: work, min: plot.min });
+        }
+        if (plot.id === 'garagem') {
+          for (const [name, width, x, z, min] of [['house-b', 6.5, -9, -1, 3], ['house-c', 7.2, -9, -11, 5]] as const) {
+            const annex = model(name, width, '#c9c2a6'); annex.position.set(x, 0, z); annex.name = `headquarters-annex-${min}`;
+            group.add(annex); headquarters.push({ group: annex, min });
+          }
+        }
         buildings.push({ group, id: plot.id, min: plot.min, scale: 1 });
         const box = new THREE.Box3().setFromObject(group);
         NORDIC_ANCHORS[i]!.position[1] = box.max.y + 1.5;
@@ -226,5 +240,9 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     const frame = Math.floor(seconds * 15);
     if (frame !== peopleFrame) { residents?.update(seconds); peopleFrame = frame; }
   }
-  return { buildings, windows, ready, update, boats, get residents() { return residents; }, cancel() { cancelled = true; } };
+  function setStage(stage: number) {
+    for (const site of constructionSites) site.group.visible = stage < site.min;
+    for (const annex of headquarters) annex.group.visible = stage >= annex.min;
+  }
+  return { buildings, windows, ready, update, setStage, constructionSites, boats, get residents() { return residents; }, cancel() { cancelled = true; } };
 }
