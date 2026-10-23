@@ -8,6 +8,7 @@ import { createFjordWater } from './fjordWater';
 import { createFjordBoats } from './fjordBoats';
 import { createVillageResidents, type VillageVisit } from './villageResidents';
 import { createConstructionSite } from './villageConstruction';
+import { addVegetationWind } from './vegetationWind';
 
 type House = 'house-a' | 'house-b' | 'house-c' | 'lodge';
 type Plot = { id: CityAnchor['id']; name: string; x: number; z: number; model: House; width: number; color: string; min: number; turn?: number };
@@ -89,6 +90,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
   const boats = createFjordBoats(root);
   let residents: ReturnType<typeof createVillageResidents> | undefined;
   let peopleFrame = -1;
+  const windClock = { value: 0 };
 
   // Narrow paths follow the terrain instead of covering the valley with city blocks.
   const pathMaterial = new THREE.MeshStandardMaterial({ color: '#a8a48c', roughness: 1 });
@@ -205,7 +207,9 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
         const green = new THREE.Color('#66875b'), bark = new THREE.Color('#8a7053');
         for (let i = 0; i < positions.count; i++) { const c = (positions.getY(i) - box.min.y) / h < .34 ? bark : green; colors.set([c.r, c.g, c.b], i * 3); }
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        const instances = new THREE.InstancedMesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), trees.length);
+        const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
+        addVegetationWind(material, windClock, box.min.y, h);
+        const instances = new THREE.InstancedMesh(geometry, material, trees.length);
         const transform = new THREE.Object3D();
         trees.forEach(([x, z], i) => { const scale = (5.2 + i % 3) / h; transform.position.set(x!, heightAt(x!, z!) - box.min.y * scale, z!); transform.rotation.y = i * 2.4; transform.scale.setScalar(scale); transform.updateMatrix(); instances.setMatrixAt(i, transform.matrix); });
         instances.castShadow = instances.receiveShadow = true; root.add(instances);
@@ -221,6 +225,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
           const original = obj.material as THREE.MeshStandardMaterial;
           const material = original.clone(); material.map = null; material.vertexColors = false;
           material.color.set(asset === 'grass-large' ? '#79925b' : '#969b89'); material.roughness = 1;
+          if (asset === 'grass-large') addVegetationWind(material, windClock, geometry.boundingBox!.min.y, size.y);
           const instances = new THREE.InstancedMesh(geometry, material, count);
           const transform = new THREE.Object3D();
           for (let i = 0; i < count; i++) {
@@ -236,6 +241,7 @@ export function buildNordicVale(scene: THREE.Scene, load = (name: string): Promi
     } finally { for (const source of sources.values()) releaseSource(source); }
   })();
   function update(seconds: number) {
+    windClock.value = seconds;
     water.update(seconds); boats.update(seconds);
     const frame = Math.floor(seconds * 15);
     if (frame !== peopleFrame) { residents?.update(seconds); peopleFrame = frame; }

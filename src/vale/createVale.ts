@@ -92,13 +92,19 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     }
     scene.environmentIntensity = night ? .1 : .48 * light;
     finish.setNight(night);
+    const hours = new Date().getHours() + new Date().getMinutes() / 60;
+    const solarAngle = (hours - 6) / 12 * Math.PI;
+    const elevation = Math.max(.12, Math.sin(solarAngle));
+    sun.position.set(night ? -35 : Math.cos(solarAngle) * 70, night ? 55 : 32 + elevation * 65, 60);
+    renderer.shadowMap.needsUpdate = true;
     scene.background = c;
     scene.fog = new THREE.Fog(c, fogNear, fogFar);
     hemi.color.set(night ? 0x7788bb : 0xe8f1ff);
-    hemi.intensity = 0.65 * Math.PI * light;
+    hemi.intensity = 0.65 * Math.PI * light * (night ? .65 : 1);
     sun.color.set(night ? 0x9fb4ff : 0xfff1dc);
-    sun.intensity = 1.1 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.85);
-    for (const m of city.windows) m.emissiveIntensity = night ? 1 : .18;
+    if (!night) sun.color.lerp(new THREE.Color('#ffc88d'), (1 - elevation) * .32);
+    sun.intensity = 1.1 * Math.PI * light * (weather.kind === 'clear' ? 1 : 0.85) * (night ? .35 : 1);
+    for (const m of city.windows) m.emissiveIntensity = night ? 2.2 : .18;
   };
 
   const cam = new THREE.PerspectiveCamera(36, 1, 1, 700);
@@ -240,10 +246,13 @@ export function createVale(canvas: HTMLCanvasElement, overlay: HTMLElement, init
     paint(); onAssets?.('ready');
   }).catch(() => { if (!disposed) onAssets?.('error'); });
   let raf = 0;
+  let lightMinute = -1;
   const v3 = new THREE.Vector3();
   const frame = (now: number) => {
     raf = requestAnimationFrame(frame);
     if (document.hidden) { last = now; return; }
+    const minute = Math.floor(Date.now() / 60000);
+    if (minute !== lightMinute) { lightMinute = minute; paint(); }
     if (now - last < 1000 / 30 - 1) return;
     const interval = now - last;
     const dt = Math.min(.1, interval / 1000);
